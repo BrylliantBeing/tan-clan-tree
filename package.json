@@ -4,6 +4,8 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~58.0.26",
+    "@types/jest": "30.0.0",
+    "compression": "^1.8.2",
     "expo": "~58.0.22",
     "expo-constants": "~58.0.14",
     "expo-device": "~58.0.5",
@@ -12,11 +14,18 @@
     "expo-image": "~58.0.18",
     "expo-linking": "~58.0.15",
     "expo-router": "~58.0.29",
+    "expo-server": "~58.0.6",
     "expo-splash-screen": "~58.0.12",
     "expo-status-bar": "~58.0.4",
     "expo-symbols": "~58.0.4",
     "expo-system-ui": "~58.0.7",
     "expo-web-browser": "~58.0.7",
+    "express": "^5.3.0",
+    "jest": "~30.5.2",
+    "jest-expo": "~58.0.13",
+    "morgan": "^1.12.1",
+    "mysql2": "^3.24.6",
+    "nodemailer": "^10.3.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -24,20 +33,38 @@
     "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.10.1",
     "react-native-screens": "~4.30.1",
+    "react-native-svg": "15.16.0",
     "react-native-web": "~0.21.4",
-    "react-native-worklets": "0.13.0"
+    "react-native-worklets": "0.13.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "~19.3.0",
+    "eslint": "^9.0.0",
+    "eslint-config-expo": "~58.0.4",
     "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build": "expo export -p web",
+    "serve": "node server.js",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node --env-file=.env scripts/migrate.js",
+    "db:create-admin": "node --env-file=.env scripts/create-admin.js",
+    "test:e2e": "node --env-file=.env.test.local scripts/e2e.js"
   },
-  "private": true
+  "private": true,
+  "jest": {
+    "preset": "jest-expo",
+    "moduleNameMapper": {
+      "^@/(.*)$": "<rootDir>/src/$1"
+    }
+  }
 }
