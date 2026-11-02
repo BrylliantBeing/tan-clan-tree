@@ -23,7 +23,7 @@ export async function GET(request: Request) {
      JOIN people b ON b.id = s.person_b_id AND b.status = 'approved'`
   );
   const [parentChild] = await db.query<Row[]>(
-    `SELECT l.parent_id AS parentId, l.child_id AS childId
+    `SELECT l.parent_id AS parentId, l.child_id AS childId, l.kind
      FROM parent_child l
      JOIN people parent ON parent.id = l.parent_id AND parent.status = 'approved'
      JOIN people child ON child.id = l.child_id AND child.status = 'approved'`

@@ -1,4 +1,7 @@
-export type ParentChildLink = { parentId: string; childId: string };
+export type ParentKind = 'birth' | 'adoptive';
+
+// A link with no kind is a birth parent
+export type ParentChildLink = { parentId: string; childId: string; kind?: ParentKind };
 
 // True when linking parentId -> childId would make someone their own ancestor
 export function wouldCreateCycle(links: ParentChildLink[], parentId: string, childId: string) {

@@ -20,7 +20,16 @@ import { InviteLinkCard } from '@/features/people/invite-link-card';
 import { PersonEditor } from '@/features/people/person-editor';
 import { PhotoEditor } from '@/features/people/photo-editor';
 import { useSession } from '@/features/session/session-context';
-import { childrenOf, parentsOf, type Person, spousesOf, type TreeData, useTree } from '@/features/tree/use-tree';
+import { type ParentKind } from '@/features/tree/graph';
+import {
+  childrenOf,
+  isAdoptiveLink,
+  parentsOf,
+  type Person,
+  spousesOf,
+  type TreeData,
+  useTree,
+} from '@/features/tree/use-tree';
 import { useTheme } from '@/hooks/use-theme';
 import { api, errorMessage } from '@/lib/api';
 
@@ -33,7 +42,9 @@ function AdminControls({
   tree: TreeData;
   onChanged: () => Promise<void>;
 }) {
-  const [relationType, setRelationType] = useState<'spouse' | 'parent' | 'child'>('spouse');
+  const [relationType, setRelationType] = useState<'spouse' | 'parent' | 'adoptiveParent' | 'child' | 'adoptedChild'>(
+    'spouse'
+  );
   const [otherId, setOtherId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -51,33 +62,46 @@ function AdminControls({
     }
   };
 
-  const relationships = (method: 'POST' | 'DELETE', type: 'spouse' | 'parent', firstId: string, secondId: string) =>
-    api('/api/admin/relationships', { method, body: { type, firstId, secondId } });
+  const relationships = (
+    method: 'POST' | 'DELETE',
+    type: 'spouse' | 'parent',
+    firstId: string,
+    secondId: string,
+    kind: ParentKind = 'birth'
+  ) => api('/api/admin/relationships', { method, body: { type, firstId, secondId, kind } });
 
   const addRelationship = () =>
     run(async () => {
       if (!otherId) return;
       if (relationType === 'spouse') await relationships('POST', 'spouse', person.id, otherId);
       if (relationType === 'parent') await relationships('POST', 'parent', otherId, person.id);
+      if (relationType === 'adoptiveParent') await relationships('POST', 'parent', otherId, person.id, 'adoptive');
       if (relationType === 'child') await relationships('POST', 'parent', person.id, otherId);
+      if (relationType === 'adoptedChild') await relationships('POST', 'parent', person.id, otherId, 'adoptive');
       setOtherId(null);
     });
 
   const others = tree.people.filter((other) => other.id !== person.id);
+  const parents = parentsOf(tree, person.id);
+  const isAdopted = parents.some((parent) => isAdoptiveLink(tree, parent.id, person.id));
+  const parentLabel = (parent: Person) => {
+    if (isAdoptiveLink(tree, parent.id, person.id)) return 'Adoptive parent';
+    return isAdopted ? 'Birth parent' : 'Parent';
+  };
   const existing = [
     ...spousesOf(tree, person.id).map((other) => ({
       other,
       label: 'Spouse',
       remove: () => relationships('DELETE', 'spouse', person.id, other.id),
     })),
-    ...parentsOf(tree, person.id).map((other) => ({
+    ...parents.map((other) => ({
       other,
-      label: 'Parent',
+      label: parentLabel(other),
       remove: () => relationships('DELETE', 'parent', other.id, person.id),
     })),
     ...childrenOf(tree, person.id).map((other) => ({
       other,
-      label: 'Child',
+      label: isAdoptiveLink(tree, person.id, other.id) ? 'Adopted child' : 'Child',
       remove: () => relationships('DELETE', 'parent', person.id, other.id),
     })),
   ];
@@ -96,7 +120,9 @@ function AdminControls({
         options={[
           { value: 'spouse', label: 'Spouse' },
           { value: 'parent', label: 'Parent' },
+          { value: 'adoptiveParent', label: 'Adoptive parent' },
           { value: 'child', label: 'Child' },
+          { value: 'adoptedChild', label: 'Adopted child' },
         ]}
         value={relationType}
         onChange={setRelationType}

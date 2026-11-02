@@ -27,6 +27,7 @@ export function PersonDetails({
   isWide,
   isSelf,
   isAdmin,
+  adoptedBy,
   onAdd,
   onClose,
 }: {
@@ -39,6 +40,7 @@ export function PersonDetails({
   isWide: boolean;
   isSelf: boolean;
   isAdmin: boolean;
+  adoptedBy: string[];
   onAdd: (zone: AddZone) => void;
   onClose: () => void;
 }) {
@@ -101,6 +103,7 @@ export function PersonDetails({
                 {person.deathDate ? `Died ${formatDate(person.deathDate)}` : 'Deceased'}
               </ThemedText>
             ) : null}
+            {adoptedBy.length > 0 ? <ThemedText type="small">{`Adopted by ${adoptedBy.join(' and ')}`}</ThemedText> : null}
             {person.phone ? (
               <TextLink href={`tel:${person.phone.replace(/[^+0-9]/g, '')}`} style={styles.link}>
                 {person.phone}

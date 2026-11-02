@@ -6,7 +6,7 @@ import { relationshipSchema } from '@/server/validation';
 
 export async function POST(request: Request) {
   await requireAdmin(request);
-  const { type, firstId, secondId } = await readBody(request, relationshipSchema);
+  const { type, firstId, secondId, kind } = await readBody(request, relationshipSchema);
 
   await withTransaction(async (db) => {
     const [people] = await db.execute<Row[]>(
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     if (type === 'spouse') {
       await addSpouses(db, firstId, secondId);
     } else {
-      await addParentLink(db, firstId, secondId);
+      await addParentLink(db, firstId, secondId, kind);
     }
   });
   return Response.json({ ok: true }, { status: 201 });

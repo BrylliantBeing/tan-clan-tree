@@ -25,9 +25,10 @@ import { type Camera, cameraShowing, toTreePoint, zoomAround } from './camera';
 import { type Hit, hitTest, type Zone } from './hit-zones';
 import { CARD_HEIGHT, CARD_WIDTH, layoutTree } from './layout';
 import { PersonDetails } from './person-details';
-import { type Person, type TreeData } from './use-tree';
+import { isAdoptiveLink, parentsOf, type Person, type TreeData } from './use-tree';
 
 const LINE_PADDING = 40;
+const BIRTH_LINE_DASH = '6 5';
 const WIDE_SCREEN = 640;
 const ZOOM_STEP = 1.3;
 const HANDLE_SIZE = 24;
@@ -382,6 +383,7 @@ export function TreeView({
     () => [...layout.spouseLines, ...layout.familyLines].flatMap((line) => line.paths),
     [layout]
   );
+  const birthLinePaths = useMemo(() => layout.birthLines.flatMap((line) => line.paths), [layout]);
 
   return (
     <View style={styles.container}>
@@ -412,6 +414,17 @@ export function TreeView({
                     stroke={theme.treeLine}
                     strokeWidth={1.5}
                     strokeLinejoin="round"
+                    fill="none"
+                  />
+                ))}
+                {birthLinePaths.map((path) => (
+                  <Path
+                    key={path}
+                    d={path}
+                    transform={`translate(${LINE_PADDING} ${LINE_PADDING})`}
+                    stroke={theme.treeLine}
+                    strokeWidth={1.5}
+                    strokeDasharray={BIRTH_LINE_DASH}
                     fill="none"
                   />
                 ))}
@@ -476,6 +489,9 @@ export function TreeView({
           isWide={isWide}
           isSelf={selected.id === selfId}
           isAdmin={user?.role === 'admin'}
+          adoptedBy={parentsOf(tree, selected.id)
+            .filter((parent) => isAdoptiveLink(tree, parent.id, selected.id))
+            .map((parent) => parent.fullName)}
           onAdd={(zone) => startAdding(selected.id, zone)}
           onClose={() => setSelectedId(null)}
         />

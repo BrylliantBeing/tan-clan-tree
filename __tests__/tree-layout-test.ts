@@ -138,6 +138,90 @@ function expectNoOverlaps(input: TreeInput) {
   }
 }
 
+describe('adoption by a great uncle', () => {
+  const links: TreeInput['parentChild'] = [
+    { parentId: 'ancestor', childId: 'uncle' },
+    { parentId: 'ancestor', childId: 'grandparent' },
+    { parentId: 'grandparent', childId: 'father' },
+    { parentId: 'father', childId: 'adoptee' },
+    { parentId: 'mother', childId: 'adoptee' },
+    { parentId: 'uncle', childId: 'adoptee', kind: 'adoptive' },
+    { parentId: 'adoptee', childId: 'descendant' },
+  ];
+  const names = ['ancestor', 'uncle', 'grandparent', 'father', 'mother', 'adoptee', 'descendant'];
+  const spouses = [{ firstId: 'father', secondId: 'mother' }];
+
+  // Real ids are random, and the result must not depend on how they happen to sort
+  const everyOrdering = names.map((_, rotation) => (id: string) => `${(names.indexOf(id) + rotation) % names.length}-${id}`);
+
+  it.each(everyOrdering.map((rename, rotation) => [rotation, rename] as const))(
+    'keeps everyone on their row with id ordering %i',
+    (_, rename) => {
+      const { at } = positions({
+        ids: names.map(rename),
+        spouses: spouses.map(({ firstId, secondId }) => ({ firstId: rename(firstId), secondId: rename(secondId) })),
+        parentChild: links.map((link) => ({ ...link, parentId: rename(link.parentId), childId: rename(link.childId) })),
+      });
+      const row = (id: string) => at.get(rename(id))!.generation;
+      expect(row('uncle')).toBe(row('ancestor') + 1);
+      expect(row('grandparent')).toBe(row('uncle'));
+      expect(row('adoptee')).toBe(row('uncle') + 1);
+      expect(row('father')).toBe(row('grandparent') + 1);
+      expect(row('mother')).toBe(row('father'));
+      expect(row('descendant')).toBe(row('adoptee') + 1);
+    }
+  );
+
+  it('draws the adoptive parent solid and the birth parents dashed', () => {
+    const { layout } = positions({ ids: names, spouses, parentChild: links });
+    expect(layout.familyLines.find((line) => line.children.some(({ id }) => id === 'adoptee'))!.parentIds).toEqual(['uncle']);
+    expect(layout.birthLines).toHaveLength(1);
+    expect(layout.birthLines[0]).toMatchObject({ parentIds: ['father', 'mother'], childIds: ['adoptee'] });
+    expect(layout.birthLines[0].paths.length).toBeGreaterThan(0);
+  });
+
+  it('keeps every line clear of the cards', () => {
+    const { layout } = positions({ ids: names, spouses, parentChild: links });
+    const clear = (line: { paths: string[] }) =>
+      line.paths.flatMap(segmentsOf).every((segment) =>
+        layout.people.every(
+          (person) =>
+            segment.x2 <= person.x ||
+            segment.x1 >= person.x + CARD_WIDTH ||
+            segment.y2 <= person.y ||
+            segment.y1 >= person.y + CARD_HEIGHT
+        )
+      );
+    expect([...layout.familyLines, ...layout.birthLines].every(clear)).toBe(true);
+    expect(lineCollisions(layout).overlaps).toBe(0);
+  });
+
+  it('places birth parents known only through the adopted person one row above them', () => {
+    const { at, layout } = positions({
+      ids: ['uncle', 'adoptee', 'father', 'mother'],
+      spouses: [],
+      parentChild: [
+        { parentId: 'uncle', childId: 'adoptee', kind: 'adoptive' },
+        { parentId: 'father', childId: 'adoptee' },
+        { parentId: 'mother', childId: 'adoptee' },
+      ],
+    });
+    expect(at.get('father')!.generation).toBe(at.get('adoptee')!.generation - 1);
+    expect(at.get('mother')!.generation).toBe(at.get('father')!.generation);
+    expect(layout.birthLines).toHaveLength(1);
+  });
+
+  it('draws no dashed lines when nobody is adopted', () => {
+    const { layout } = positions({
+      ids: ['mom', 'kid'],
+      spouses: [],
+      parentChild: [{ parentId: 'mom', childId: 'kid', kind: 'birth' }],
+    });
+    expect(layout.birthLines).toEqual([]);
+    expect(layout.familyLines).toHaveLength(1);
+  });
+});
+
 describe('layoutTree', () => {
   it('returns an empty layout for an empty tree', () => {
     expect(layoutTree({ ids: [], spouses: [], parentChild: [] })).toMatchObject({ people: [], width: 0, height: 0 });

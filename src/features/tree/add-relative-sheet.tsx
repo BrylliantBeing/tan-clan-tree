@@ -19,7 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, errorMessage } from '@/lib/api';
 
 import { type Zone } from './hit-zones';
-import { parentsOf, type Person, spousesOf, type TreeData } from './use-tree';
+import { isAdoptiveLink, parentsOf, type Person, spousesOf, type TreeData } from './use-tree';
 
 export type AddZone = Exclude<Zone, 'card'>;
 
@@ -221,8 +221,10 @@ export function AddRelativeSheet({
     relativeId: person.id,
     otherParentId: relationType === 'child' && otherParentId !== NO_OTHER_PARENT ? otherParentId : null,
   };
-  const hasTwoParents = relationType === 'parent' && parents.length >= 2;
+  const birthParents = parents.filter((parent) => !isAdoptiveLink(tree, parent.id, person.id));
+  const hasTwoParents = relationType === 'parent' && birthParents.length >= 2;
   const needsParentFirst = relationType === 'sibling' && parents.length === 0;
+  const isSiblingOfAdopted = relationType === 'sibling' && birthParents.length < parents.length;
 
   return (
     <Modal transparent visible animationType="fade" onRequestClose={onClose}>
@@ -262,7 +264,11 @@ export function AddRelativeSheet({
               </>
             ) : null}
 
-            {!hasTwoParents && !needsParentFirst ? (
+            {isSiblingOfAdopted ? (
+              <Hint>{`${person.fullName} was adopted, so add this sibling from the card of the parent they share.`}</Hint>
+            ) : null}
+
+            {!hasTwoParents && !needsParentFirst && !isSiblingOfAdopted ? (
               <>
                 {relationType === 'child' && spouses.length > 0 ? (
                   <Choice

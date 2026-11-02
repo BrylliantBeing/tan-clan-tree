@@ -1,4 +1,4 @@
-import { type ParentChildLink, wouldCreateCycle } from '@/features/tree/graph';
+import { type ParentChildLink, type ParentKind, wouldCreateCycle } from '@/features/tree/graph';
 
 import { type Db, type Row } from './db';
 import { fail } from './http';
@@ -36,15 +36,19 @@ async function isApproved(db: Db, personId: string) {
   return rows.length > 0;
 }
 
-export async function parentCount(db: Db, childId: string) {
-  const [rows] = await db.execute<Row[]>('SELECT COUNT(*) AS total FROM parent_child WHERE child_id = ?', [childId]);
+// Birth and adoptive parents have separate limits, because an adopted person can have both
+export async function parentCount(db: Db, childId: string, kind: ParentKind = 'birth', exceptParentId = '') {
+  const [rows] = await db.execute<Row[]>(
+    'SELECT COUNT(*) AS total FROM parent_child WHERE child_id = ? AND kind = ? AND parent_id <> ?',
+    [childId, kind, exceptParentId]
+  );
   return Number(rows[0].total);
 }
 
 async function areCoParents(db: Db, first: string, second: string) {
   const [rows] = await db.execute<Row[]>(
     `SELECT 1 FROM parent_child a
-     JOIN parent_child b ON b.child_id = a.child_id
+     JOIN parent_child b ON b.child_id = a.child_id AND b.kind = a.kind
      WHERE a.parent_id = ? AND b.parent_id = ?
      LIMIT 1`,
     [first, second]
@@ -60,7 +64,7 @@ export async function resolveRelation(db: Db, relation: ProposedRelation): Promi
   if (otherParentId) fail(400, 'A second parent can only be chosen when adding a child');
   if (!(await isApproved(db, relativeId))) fail(400, 'That person is not in the family tree');
   const [parents] = await db.execute<Row[]>(
-    `SELECT l.parent_id AS parentId
+    `SELECT l.parent_id AS parentId, l.kind
      FROM parent_child l
      JOIN people p ON p.id = l.parent_id AND p.status = 'approved'
      WHERE l.child_id = ?
@@ -68,6 +72,10 @@ export async function resolveRelation(db: Db, relation: ProposedRelation): Promi
     [relativeId]
   );
   if (parents.length === 0) fail(409, 'Add a parent first, because siblings are connected through their parents');
+  // An adopted person has two families, and only the person adding the sibling knows which one they share
+  if (parents.some((parent) => parent.kind === 'adoptive')) {
+    fail(409, 'This person was adopted, so add their sibling as a child of the parent they share');
+  }
   return { relationType: 'child', relativeId: parents[0].parentId, otherParentId: parents[1]?.parentId ?? null };
 }
 
@@ -105,15 +113,19 @@ export async function attachNewPerson(db: Db, personId: string, relation: Relati
   }
 }
 
-export async function addParentLink(db: Db, parentId: string, childId: string) {
+// Adding a link that already exists changes its kind, so a parent entered the wrong way can be corrected
+export async function addParentLink(db: Db, parentId: string, childId: string, kind: ParentKind = 'birth') {
   const [rows] = await db.execute<Row[]>('SELECT parent_id AS parentId, child_id AS childId FROM parent_child');
   if (wouldCreateCycle(rows as ParentChildLink[], parentId, childId)) {
     fail(409, 'This would make someone their own ancestor');
   }
-  if ((await parentCount(db, childId)) >= MAX_PARENTS) {
-    fail(409, 'That person already has two parents in the family tree');
+  if ((await parentCount(db, childId, kind, parentId)) >= MAX_PARENTS) {
+    fail(409, `That person already has two ${kind === 'adoptive' ? 'adoptive ' : ''}parents in the family tree`);
   }
-  await db.execute('INSERT IGNORE INTO parent_child (parent_id, child_id) VALUES (?, ?)', [parentId, childId]);
+  await db.execute(
+    'INSERT INTO parent_child (parent_id, child_id, kind) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE kind = ?',
+    [parentId, childId, kind, kind]
+  );
 }
 
 export async function removeAllRelations(db: Db, personId: string) {

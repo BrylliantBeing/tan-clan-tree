@@ -4,7 +4,7 @@
 import { DELETE, GET, PUT } from '@/app/api/people/[id]/photo+api';
 import { requireApproved } from '@/server/auth';
 import { getPool } from '@/server/db';
-import { assertRelationAllowed, resolveRelation } from '@/server/relations';
+import { addParentLink, assertRelationAllowed, resolveRelation } from '@/server/relations';
 
 jest.mock('@/server/auth', () => ({ requireApproved: jest.fn() }));
 jest.mock('@/server/db', () => ({ getPool: jest.fn() }));
@@ -145,10 +145,47 @@ describe('resolveRelation', () => {
     await expect(resolveRelation(fakeDb(), relation)).rejects.toMatchObject({ status: 400 });
   });
 
+  it('refuses to guess which family the sibling of an adopted person belongs to', async () => {
+    const db = fakeDb([
+      approved,
+      [/FROM parent_child/, [{ parentId: 'uncle', kind: 'adoptive' }, { parentId: 'dad', kind: 'birth' }]],
+    ]);
+    await expect(resolveRelation(db, relation)).rejects.toMatchObject({ status: 409 });
+  });
+
   it('refuses a chosen second parent on a sibling', async () => {
     await expect(resolveRelation(fakeDb([approved]), { ...relation, otherParentId: OTHER })).rejects.toMatchObject({
       status: 400,
     });
+  });
+});
+
+describe('addParentLink', () => {
+  const twoAlready: [RegExp, unknown[]] = [/COUNT\(\*\)/, [{ total: 2 }]];
+  const noneYet: [RegExp, unknown[]] = [/COUNT\(\*\)/, [{ total: 0 }]];
+
+  it('saves an adoptive parent as adoptive', async () => {
+    const db = fakeDb([noneYet]);
+    await addParentLink(db, OTHER, SELF, 'adoptive');
+    const [, params] = db.execute.mock.calls.find(([sql]) => /INSERT INTO parent_child/.test(sql)) as [string, unknown[]];
+    expect(params.slice(0, 3)).toEqual([OTHER, SELF, 'adoptive']);
+  });
+
+  it('counts each kind of parent separately', async () => {
+    const db = fakeDb([noneYet]);
+    await addParentLink(db, OTHER, SELF, 'adoptive');
+    const [, params] = db.execute.mock.calls.find(([sql]) => /COUNT\(\*\)/.test(sql)) as [string, unknown[]];
+    expect(params).toEqual([SELF, 'adoptive', OTHER]);
+  });
+
+  it('refuses a third parent of the same kind', async () => {
+    await expect(addParentLink(fakeDb([twoAlready]), OTHER, SELF, 'adoptive')).rejects.toMatchObject({ status: 409 });
+    await expect(addParentLink(fakeDb([twoAlready]), OTHER, SELF)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('still refuses to make someone their own ancestor', async () => {
+    const db = fakeDb([[/SELECT parent_id/, [{ parentId: SELF, childId: OTHER }]], noneYet]);
+    await expect(addParentLink(db, OTHER, SELF, 'adoptive')).rejects.toMatchObject({ status: 409 });
   });
 });
 

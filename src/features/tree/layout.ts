@@ -43,10 +43,18 @@ export type FamilyLine = {
   paths: string[];
 };
 
+// The dashed line from someone adopted back to their birth parents
+export type BirthLine = {
+  parentIds: string[];
+  childIds: string[];
+  paths: string[];
+};
+
 export type TreeLayout = {
   people: PositionedPerson[];
   spouseLines: SpouseLine[];
   familyLines: FamilyLine[];
+  birthLines: BirthLine[];
   width: number;
   height: number;
 };
@@ -64,11 +72,42 @@ function push(map: Map<string, string[]>, key: string, value: string) {
   else map.set(key, [value]);
 }
 
+// Children who share the same set of parents hang from one line, which keeps half-siblings apart
+function groupFamilies(parentsOf: Map<string, string[]>) {
+  const familiesByKey = new Map<string, Family>();
+  for (const childId of [...parentsOf.keys()].sort()) {
+    const parentIds = parentsOf.get(childId)!;
+    const key = parentIds.join('|');
+    const family = familiesByKey.get(key);
+    if (family) family.childIds.push(childId);
+    else familiesByKey.set(key, { parentIds, childIds: [childId] });
+  }
+  return [...familiesByKey.values()];
+}
+
+// Gives a row to the rest of the first birth family that has been partly placed, and returns who was added
+function placeNextBirthFamily(birthFamilies: Family[], generation: Map<string, number>) {
+  for (const { parentIds, childIds } of birthFamilies) {
+    const members = [...parentIds, ...childIds];
+    const missing = members.filter((id) => !generation.has(id));
+    if (missing.length === 0 || missing.length === members.length) continue;
+    const placedParent = parentIds.find((id) => generation.has(id));
+    const parentLevel =
+      placedParent !== undefined
+        ? generation.get(placedParent)!
+        : Math.min(...childIds.filter((id) => generation.has(id)).map((id) => generation.get(id)!)) - 1;
+    for (const id of missing) generation.set(id, parentIds.includes(id) ? parentLevel : parentLevel + 1);
+    return missing;
+  }
+  return [];
+}
+
 function assignGenerations(
   ids: string[],
   spousesOf: Map<string, string[]>,
   childrenOf: Map<string, string[]>,
-  parentsOf: Map<string, string[]>
+  parentsOf: Map<string, string[]>,
+  birthFamilies: Family[]
 ) {
   const generation = new Map<string, number>();
   const components: string[][] = [];
@@ -96,6 +135,8 @@ function assignGenerations(
           queue.push(person);
         }
       }
+      // Dashed lines only choose a row for people the solid lines don't reach, so they can't disturb anyone else's
+      if (queue.length === 0) queue.push(...placeNextBirthFamily(birthFamilies, generation));
     }
 
     const lowest = Math.min(...component.map((id) => generation.get(id)!));
@@ -409,28 +450,27 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
     push(spousesOf, firstId, secondId);
     push(spousesOf, secondId, firstId);
   }
-  for (const { parentId, childId } of knownParents) {
-    push(childrenOf, parentId, childId);
-    push(parentsOf, childId, parentId);
+  // Someone adopted hangs from their adoptive parents, so their birth parents get a dashed line instead
+  const adopted = new Set(knownParents.filter(({ kind }) => kind === 'adoptive').map(({ childId }) => childId));
+  const birthParentsOf = new Map<string, string[]>();
+  for (const { parentId, childId, kind } of knownParents) {
+    if (adopted.has(childId) && kind !== 'adoptive') {
+      push(birthParentsOf, childId, parentId);
+    } else {
+      push(childrenOf, parentId, childId);
+      push(parentsOf, childId, parentId);
+    }
   }
-  for (const relatives of [spousesOf, childrenOf, parentsOf]) {
+  for (const relatives of [spousesOf, childrenOf, parentsOf, birthParentsOf]) {
     for (const list of relatives.values()) list.sort();
   }
 
-  // Children who share the same set of parents hang from one line, which keeps half-siblings apart
-  const familiesByKey = new Map<string, Family>();
-  for (const childId of [...parentsOf.keys()].sort()) {
-    const parentIds = parentsOf.get(childId)!;
-    const key = parentIds.join('|');
-    const family = familiesByKey.get(key);
-    if (family) family.childIds.push(childId);
-    else familiesByKey.set(key, { parentIds, childIds: [childId] });
-  }
-  const families = [...familiesByKey.values()];
+  const families = groupFamilies(parentsOf);
+  const birthFamilies = groupFamilies(birthParentsOf);
 
   // Parents of the same child sit together even when they aren't listed as spouses. Spouses come first, so they sit closest.
   const partnersOf = new Map([...spousesOf].map(([id, list]) => [id, [...list]]));
-  for (const { parentIds } of families) {
+  for (const { parentIds } of [...families, ...birthFamilies]) {
     for (const parent of parentIds) {
       for (const other of parentIds) {
         if (parent !== other && !partnersOf.get(parent)?.includes(other)) push(partnersOf, parent, other);
@@ -438,7 +478,7 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
     }
   }
 
-  const { generation, components } = assignGenerations(sortedIds, spousesOf, childrenOf, parentsOf);
+  const { generation, components } = assignGenerations(sortedIds, spousesOf, childrenOf, parentsOf, birthFamilies);
 
   const people: PositionedPerson[] = [];
   let offset = 0;
@@ -477,7 +517,7 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
   const isCouple = ({ parentIds }: Family) =>
     parentIds.length === 2 && isAdjacentCouple(parentIds[0], parentIds[1]);
 
-  const familyConnections: Connection[] = families.map((family) => {
+  const familyConnection = (family: Family): Connection => {
     const parents = family.parentIds.map((id) => positions.get(id)!);
     const childTerminals = family.childIds.map((id) => cardTerminal(positions.get(id)!, 'top'));
     const mainChannel = Math.max(...parents.map((parent) => parent.generation)) + 1;
@@ -487,10 +527,24 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
       return { terminals: [stem, ...childTerminals], mainChannel };
     }
     return { terminals: [...parents.map((parent) => cardTerminal(parent, 'bottom')), ...childTerminals], mainChannel };
+  };
+
+  const familyConnections = families.map(familyConnection);
+
+  // Adoption can leave a birth parent level with their child, or even below, so those lines join the cards' tops
+  const birthConnections = birthFamilies.map((family): Connection => {
+    const parents = family.parentIds.map((id) => positions.get(id)!);
+    const children = family.childIds.map((id) => positions.get(id)!);
+    const childRow = Math.min(...children.map((child) => child.generation));
+    if (parents.every((parent) => parent.generation < childRow)) return familyConnection(family);
+    const terminals = [...parents, ...children].map((person) =>
+      cardTerminal(person, person.generation < childRow ? 'bottom' : 'top')
+    );
+    return { terminals, mainChannel: childRow };
   });
 
   const { routes, rowTops, height } = routeConnections({
-    connections: [...spouseConnections, ...familyConnections],
+    connections: [...spouseConnections, ...familyConnections, ...birthConnections],
     rowObstacles: rowObstaclesOf(people),
     rowHeight: CARD_HEIGHT,
     minChannelHeight: GENERATION_GAP,
@@ -537,7 +591,13 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
     };
   });
 
+  const birthLines: BirthLine[] = birthFamilies.map((family, index) => ({
+    parentIds: family.parentIds,
+    childIds: family.childIds,
+    paths: routes[routedSpouses.length + families.length + index].paths,
+  }));
+
   const width = people.length > 0 ? Math.max(...people.map((person) => person.x)) + CARD_WIDTH : 0;
 
-  return { people, spouseLines, familyLines, width, height };
+  return { people, spouseLines, familyLines, birthLines, width, height };
 }

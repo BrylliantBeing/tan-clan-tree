@@ -69,6 +69,12 @@ export function parentsOf(tree: TreeData, personId: string) {
   return tree.people.filter((person) => ids.includes(person.id));
 }
 
+export function isAdoptiveLink(tree: TreeData, parentId: string, childId: string) {
+  return tree.parentChild.some(
+    (link) => link.parentId === parentId && link.childId === childId && link.kind === 'adoptive'
+  );
+}
+
 export function childrenOf(tree: TreeData, personId: string) {
   const ids = tree.parentChild.filter((link) => link.parentId === personId).map((link) => link.childId);
   return tree.people.filter((person) => ids.includes(person.id));

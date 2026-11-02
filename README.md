@@ -46,8 +46,9 @@ The app has two tabs, Tree and Profile. The tree opens centered on whoever is si
 - Everyone edits their own details from the Profile tab. Admins manage other people through the link in a person's details, and review additions from the Profile tab.
 - When an admin adds someone, they can enter the details themselves. That person joins the tree right away, with no invite or review. They have no login until an admin creates a login link from their Manage page.
 - Admins can permanently remove someone from their Manage page, which also deletes their login, photo, relationships and invite links. Admins can't remove themselves, and additions waiting for review that are linked to the person must be approved or rejected first.
+- Admins record an adoption from a person's Manage page, by adding someone as their adoptive parent or adopted child. An adopted person sits under their adoptive parents, on the row below them, with a dashed line to any birth parents. A person can have up to two parents of each kind.
 
-A sibling isn't stored as its own relationship. The server saves them as another child of the same parents, so a sibling can only be added once the person has a parent in the tree.
+A sibling isn't stored as its own relationship. The server saves them as another child of the same parents, so a sibling can only be added once the person has a parent in the tree. An adopted person's sibling has to be added as a child of the parent they share, because the server can't tell which family that is.
 
 Photos are stored in the database, in `person_photos`, and only signed-in, approved members can load them. The app crops and shrinks each photo before uploading it.
 

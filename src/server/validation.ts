@@ -157,6 +157,7 @@ export const relationshipSchema = z
     // For 'parent', firstId is the parent and secondId is the child
     firstId: idField,
     secondId: idField,
+    kind: z.enum(['birth', 'adoptive']).default('birth'),
   })
   .refine((relationship) => relationship.firstId !== relationship.secondId, {
     message: 'A person cannot be related to themselves',
