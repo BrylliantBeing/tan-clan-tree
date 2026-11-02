@@ -1,4 +1,5 @@
 // CommonJS so that scripts/create-admin.js can use it without a build step.
+const { Buffer } = require('buffer');
 const crypto = require('crypto');
 const { promisify } = require('util');
 

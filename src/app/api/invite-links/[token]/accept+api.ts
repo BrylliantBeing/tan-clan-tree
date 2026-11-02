@@ -16,7 +16,8 @@ export async function POST(request: Request, { token }: Record<string, string>) 
       `SELECT id, created_by AS createdBy, relation_type AS relationType,
          relative_id AS relativeId, other_parent_id AS otherParentId
        FROM invites
-       WHERE token_hash = ? AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP()
+       WHERE token_hash = ? AND claim_person_id IS NULL
+         AND claimed_at IS NULL AND revoked_at IS NULL AND expires_at > UTC_TIMESTAMP()
        FOR UPDATE`,
       [hashToken(token)]
     );

@@ -285,6 +285,62 @@ async function main() {
     assert.equal(person.hasAccount, false);
   });
 
+  await step('a login link attaches to an existing profile, with no duplicate person', async () => {
+    const profileId = crypto.randomUUID();
+    await db.execute(`INSERT INTO people (id, full_name, birth_date, status) VALUES (?, ?, '1975-01-31', 'approved')`, [
+      profileId,
+      `Profile ${RUN}`,
+    ]);
+    const link = { personId: profileId };
+
+    assert.equal((await alice.post('/api/admin/claim-invites', link)).status, 403);
+    assert.equal((await admin.post('/api/admin/claim-invites', { personId: deceasedId })).status, 400);
+    assert.equal((await admin.post('/api/admin/claim-invites', { personId: aliceId })).status, 409);
+
+    const older = tokenOf((await admin.post('/api/admin/claim-invites', link)).body.url);
+    const created = await admin.post('/api/admin/claim-invites', link);
+    assert.equal(created.status, 201);
+    const token = tokenOf(created.body.url);
+    const details = { facebookUrl: '', email: email('profile'), password: PASSWORD };
+
+    assert.equal((await new Browser().post(`/api/invite-links/${older}/claim`, details)).status, 404);
+    const preview = await new Browser().get(`/api/invite-links/${token}`);
+    assert.equal(preview.body.invite.claimName, `Profile ${RUN}`);
+    assert.equal((await claim(new Browser(), token, 'wrongroute')).status, 404);
+
+    const before = (await admin.get('/api/tree')).body.people.length;
+    const owner = new Browser();
+    assert.equal((await owner.post(`/api/invite-links/${token}/claim`, details)).status, 201);
+    const me = (await owner.get('/api/auth/me')).body.user;
+    assert.equal(me.personId, profileId);
+    assert.equal(me.status, 'approved');
+    assert.equal(me.role, 'member');
+    assert.equal((await owner.get('/api/tree')).body.people.length, before);
+    assert.equal((await new Browser().post(`/api/invite-links/${token}/claim`, {
+      ...details,
+      email: email('profile2'),
+    })).status, 404);
+    assert.equal((await admin.post('/api/admin/claim-invites', link)).status, 409);
+  });
+
+  await step('marking a profile deceased cancels its login link', async () => {
+    const profileId = crypto.randomUUID();
+    await db.execute(`INSERT INTO people (id, full_name, status) VALUES (?, ?, 'approved')`, [
+      profileId,
+      `Second Profile ${RUN}`,
+    ]);
+    const token = tokenOf((await admin.post('/api/admin/claim-invites', { personId: profileId })).body.url);
+    const update = await admin.patch(`/api/people/${profileId}`, {
+      fullName: `Second Profile ${RUN}`,
+      birthDate: '',
+      facebookUrl: '',
+      isDeceased: true,
+      deathDate: '',
+    });
+    assert.equal(update.status, 200, JSON.stringify(update.body));
+    assert.equal((await new Browser().get(`/api/invite-links/${token}`)).status, 404);
+  });
+
   await step('members can edit only themselves, and cannot change their own status', async () => {
     const details = { fullName: 'Hacked', birthDate: '', facebookUrl: '' };
     assert.equal((await alice.patch(`/api/people/${deceasedId}`, details)).status, 403);

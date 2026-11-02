@@ -40,8 +40,9 @@ export async function PATCH(request: Request, { id }: Record<string, string>) {
         await endAllSessions(db, person.accountId);
       }
       await db.execute(
-        'UPDATE invites SET revoked_at = UTC_TIMESTAMP() WHERE created_by = ? AND claimed_at IS NULL AND revoked_at IS NULL',
-        [id]
+        `UPDATE invites SET revoked_at = UTC_TIMESTAMP()
+         WHERE (created_by = ? OR claim_person_id = ?) AND claimed_at IS NULL AND revoked_at IS NULL`,
+        [id, id]
       );
     }
     // Lets an admin undo marking someone as deceased by mistake

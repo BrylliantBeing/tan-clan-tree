@@ -35,28 +35,36 @@ function statusOf(user: SessionUser | null): SessionStatus {
   return user.status === 'approved' ? 'approved' : 'pending';
 }
 
+type LoadResult = { user: SessionUser | null; failed: boolean };
+
+async function loadUser(): Promise<LoadResult> {
+  try {
+    const { user } = await api<{ user: SessionUser | null }>('/api/auth/me');
+    return { user, failed: false };
+  } catch {
+    return { user: null, failed: true };
+  }
+}
+
 export function SessionProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const refresh = useCallback(async () => {
-    try {
-      const { user: current } = await api<{ user: SessionUser | null }>('/api/auth/me');
-      setUser(current);
-      setLoadFailed(false);
-    } catch {
-      setUser(null);
-      setLoadFailed(true);
-    } finally {
-      setIsLoading(false);
-    }
+  const applyResult = useCallback((result: LoadResult) => {
+    setUser(result.user);
+    setLoadFailed(result.failed);
+    setIsLoading(false);
   }, []);
+
+  const refresh = useCallback(async () => {
+    applyResult(await loadUser());
+  }, [applyResult]);
 
   // Runs only in the browser, so server-rendered pages always start in the loading state
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    loadUser().then(applyResult);
+  }, [applyResult]);
 
   const signIn = useCallback(
     async (email: string, password: string) => {

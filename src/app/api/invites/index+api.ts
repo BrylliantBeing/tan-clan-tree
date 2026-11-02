@@ -11,7 +11,8 @@ export async function GET(request: Request) {
   const user = await requireApproved(request);
   const [rows] = await getPool().execute<Row[]>(
     `SELECT i.id, i.relation_type AS relationType, relative.full_name AS relativeName,
-       claimed.full_name AS claimedName, i.expires_at AS expiresAt, i.created_at AS createdAt,
+       claimed.full_name AS claimedName, target.full_name AS claimName,
+       i.expires_at AS expiresAt, i.created_at AS createdAt,
        CASE
          WHEN i.claimed_person_id IS NOT NULL THEN 'claimed'
          WHEN i.claimed_at IS NOT NULL THEN 'claimed'
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
          ELSE 'active'
        END AS status
      FROM invites i
-     JOIN people relative ON relative.id = i.relative_id
+     LEFT JOIN people relative ON relative.id = i.relative_id
+     LEFT JOIN people target ON target.id = i.claim_person_id
      LEFT JOIN people claimed ON claimed.id = i.claimed_person_id
      WHERE i.created_by = ?
      ORDER BY i.created_at DESC`,

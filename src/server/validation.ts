@@ -85,6 +85,14 @@ export const acceptInviteSchema = z.object({
   password: passwordField,
 });
 
+export const claimProfileSchema = z.object({
+  facebookUrl: facebookField,
+  email: emailField,
+  password: passwordField,
+});
+
+export const createClaimInviteSchema = z.object({ personId: idField });
+
 export const proposeDeceasedSchema = z
   .object({
     ...relationFields,

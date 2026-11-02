@@ -16,6 +16,7 @@ import {
 } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { InviteLinkCard } from '@/features/people/invite-link-card';
 import { RelationPicker, type RelationValue } from '@/features/people/relation-picker';
 import { useSession } from '@/features/session/session-context';
 import { useTree } from '@/features/tree/use-tree';
@@ -24,36 +25,41 @@ import { RELATION_LABELS } from '@/lib/format';
 
 type Invite = {
   id: string;
-  relationType: keyof typeof RELATION_LABELS;
-  relativeName: string;
+  relationType: keyof typeof RELATION_LABELS | null;
+  relativeName: string | null;
+  claimName: string | null;
   claimedName: string | null;
   status: 'active' | 'claimed' | 'revoked' | 'expired';
 };
 
+async function fetchInvites() {
+  const { invites } = await api<{ invites: Invite[] }>('/api/invites');
+  return invites;
+}
+
 function InviteForm({ relation }: { relation: RelationValue }) {
   const [url, setUrl] = useState<string | null>(null);
-  const [isCopied, setIsCopied] = useState(false);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
-  const loadInvites = useCallback(async () => {
-    try {
-      const result = await api<{ invites: Invite[] }>('/api/invites');
-      setInvites(result.invites);
-    } catch (caught) {
-      setError(errorMessage(caught));
-    }
-  }, []);
+  const loadInvites = useCallback(
+    () =>
+      fetchInvites()
+        .then(setInvites)
+        .catch((caught) => setError(errorMessage(caught))),
+    []
+  );
 
   useEffect(() => {
-    loadInvites();
-  }, [loadInvites]);
+    fetchInvites()
+      .then(setInvites)
+      .catch((caught) => setError(errorMessage(caught)));
+  }, []);
 
   const createLink = async () => {
     setIsBusy(true);
     setError(null);
-    setIsCopied(false);
     try {
       const result = await api<{ url: string }>('/api/invites', { method: 'POST', body: relation });
       setUrl(result.url);
@@ -62,16 +68,6 @@ function InviteForm({ relation }: { relation: RelationValue }) {
       setError(errorMessage(caught));
     } finally {
       setIsBusy(false);
-    }
-  };
-
-  const copyLink = async () => {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setIsCopied(true);
-    } catch {
-      setError('Could not copy automatically. Please select the link and copy it.');
     }
   };
 
@@ -90,23 +86,16 @@ function InviteForm({ relation }: { relation: RelationValue }) {
       <Hint>The person you invite fills in their own details. An admin then reviews the addition.</Hint>
       <ErrorMessage message={error} />
       <Button label="Create invite link" busy={isBusy} disabled={!relation.relativeId} onPress={createLink} />
-      {url ? (
-        <Card>
-          <ThemedText type="smallBold">Send this link to them</ThemedText>
-          <ThemedText type="small" selectable>
-            {url}
-          </ThemedText>
-          <Hint>It works once, expires in 14 days, and is only shown now, so copy it before leaving this page.</Hint>
-          <Button label={isCopied ? 'Copied' : 'Copy link'} variant="secondary" onPress={copyLink} />
-        </Card>
-      ) : null}
+      {url ? <InviteLinkCard url={url} /> : null}
 
       {invites.length > 0 ? <SectionHeading>Your invites</SectionHeading> : null}
       {invites.map((invite) => (
         <Card key={invite.id}>
           <ThemedText type="small">
-            {`${RELATION_LABELS[invite.relationType]} of ${invite.relativeName}`}
-            {invite.claimedName ? `: ${invite.claimedName}` : ''}
+            {invite.relationType
+              ? `${RELATION_LABELS[invite.relationType]} of ${invite.relativeName}`
+              : `Login for ${invite.claimName}`}
+            {invite.relationType && invite.claimedName ? `: ${invite.claimedName}` : ''}
           </ThemedText>
           <Hint>{invite.status}</Hint>
           {invite.status === 'active' ? (
@@ -151,7 +140,7 @@ function DeceasedForm({ relation, onAdded }: { relation: RelationValue; onAdded:
 
   return (
     <>
-      <Hint>Leave a date blank if you don't know it. Once approved, an admin looks after this profile.</Hint>
+      <Hint>Leave a date blank if you don’t know it. Once approved, an admin looks after this profile.</Hint>
       <Field label="Full name" value={fullName} onChangeText={setFullName} />
       <DateField label="Birthdate (optional)" value={birthDate} onChangeText={setBirthDate} />
       <DateField label="Date of death (optional)" value={deathDate} onChangeText={setDeathDate} />

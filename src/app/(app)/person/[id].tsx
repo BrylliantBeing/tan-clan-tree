@@ -1,5 +1,5 @@
 import { Link, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { ExternalLink } from '@/components/external-link';
@@ -19,6 +19,7 @@ import {
 } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { InviteLinkCard } from '@/features/people/invite-link-card';
 import { useSession } from '@/features/session/session-context';
 import { childrenOf, parentsOf, type Person, spousesOf, type TreeData, useTree } from '@/features/tree/use-tree';
 import { useTheme } from '@/hooks/use-theme';
@@ -90,7 +91,7 @@ function PersonEditor({
             <>
               <DateField label="Date of death" value={deathDate} onChangeText={setDeathDate} />
               {person.hasAccount && !person.isDeceased ? (
-                <Hint>Saving will disable this person's login and sign them out everywhere.</Hint>
+                <Hint>Saving will disable this person’s login and sign them out everywhere.</Hint>
               ) : null}
             </>
           ) : null}
@@ -207,6 +208,40 @@ function AdminControls({
   );
 }
 
+function LoginLinkCreator({ person }: { person: Person }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const createLink = async () => {
+    setIsBusy(true);
+    setError(null);
+    try {
+      const result = await api<{ url: string }>('/api/admin/claim-invites', {
+        method: 'POST',
+        body: { personId: person.id },
+      });
+      setUrl(result.url);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <SectionHeading>Admin: login</SectionHeading>
+      <Hint>
+        {`${person.fullName} has no login yet. Whoever opens this link can sign in as them right away, so send it only to them. Creating a new link cancels any older one.`}
+      </Hint>
+      <ErrorMessage message={error} />
+      <Button label="Create login link" variant="secondary" busy={isBusy} onPress={createLink} />
+      {url ? <InviteLinkCard url={url} /> : null}
+    </Card>
+  );
+}
+
 function FamilyList({ label, people }: { label: string; people: Person[] }) {
   const theme = useTheme();
   if (people.length === 0) return null;
@@ -230,12 +265,6 @@ export default function PersonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, refresh } = useSession();
   const { tree, error, reload } = useTree();
-  const [editorKey, setEditorKey] = useState(0);
-
-  // Show fresh values in the editor when moving from one person's profile to another
-  useEffect(() => {
-    setEditorKey((key) => key + 1);
-  }, [id]);
 
   const person = tree?.people.find((candidate) => candidate.id === id);
 
@@ -286,7 +315,10 @@ export default function PersonScreen() {
         <FamilyList label="Children" people={childrenOf(tree, person.id)} />
       </View>
       {isAdmin || isSelf ? (
-        <PersonEditor key={`${person.id}-${editorKey}`} person={person} isAdmin={isAdmin} onSaved={afterChange} />
+        <PersonEditor key={person.id} person={person} isAdmin={isAdmin} onSaved={afterChange} />
+      ) : null}
+      {isAdmin && !person.hasAccount && !person.isDeceased ? (
+        <LoginLinkCreator key={person.id} person={person} />
       ) : null}
       {isAdmin ? <AdminControls person={person} tree={tree} onChanged={afterChange} /> : null}
     </Screen>

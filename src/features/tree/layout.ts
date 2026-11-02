@@ -246,6 +246,34 @@ function layoutComponent(
   return { people, width };
 }
 
+// Families whose horizontal lines would overlap get different heights, so a child never looks
+// attached to the wrong couple
+function separateOverlappingFamilies(familyLines: FamilyLine[]) {
+  const rows = new Map<number, FamilyLine[]>();
+  for (const family of familyLines) {
+    const row = rows.get(family.originY);
+    if (row) row.push(family);
+    else rows.set(family.originY, [family]);
+  }
+
+  const leftOf = (family: FamilyLine) => Math.min(family.originX, ...family.children.map((child) => child.x));
+  const rightOf = (family: FamilyLine) => Math.max(family.originX, ...family.children.map((child) => child.x));
+
+  for (const row of rows.values()) {
+    const laneEnds: number[] = [];
+    const lanes = new Map<FamilyLine, number>();
+    for (const family of [...row].sort((a, b) => leftOf(a) - leftOf(b))) {
+      let lane = laneEnds.findIndex((end) => end < leftOf(family));
+      if (lane === -1) lane = laneEnds.length;
+      laneEnds[lane] = rightOf(family);
+      lanes.set(family, lane);
+    }
+    for (const family of row) {
+      family.busY = family.originY + (GENERATION_GAP * (lanes.get(family)! + 1)) / (laneEnds.length + 1);
+    }
+  }
+}
+
 export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout {
   const known = new Set(ids);
   const sortedIds = [...ids].sort();
@@ -328,6 +356,7 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
       }),
     };
   });
+  separateOverlappingFamilies(familyLines);
 
   const width = people.length > 0 ? Math.max(...people.map((person) => person.x)) + CARD_WIDTH : 0;
   const height = people.length > 0 ? Math.max(...people.map((person) => person.y)) + CARD_HEIGHT : 0;

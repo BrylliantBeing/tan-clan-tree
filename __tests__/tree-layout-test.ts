@@ -91,6 +91,42 @@ describe('layoutTree', () => {
     expectNoOverlaps(input);
   });
 
+  it('gives half-sibling families separate lines when their lines would overlap', () => {
+    const { layout } = positions({
+      ids: ['hub', 'spouse1', 'spouse2', 'a', 'b', 'c'],
+      spouses: [
+        { firstId: 'hub', secondId: 'spouse1' },
+        { firstId: 'hub', secondId: 'spouse2' },
+      ],
+      parentChild: [
+        { parentId: 'hub', childId: 'a' },
+        { parentId: 'spouse1', childId: 'a' },
+        { parentId: 'hub', childId: 'b' },
+        { parentId: 'spouse1', childId: 'b' },
+        { parentId: 'hub', childId: 'c' },
+        { parentId: 'spouse2', childId: 'c' },
+      ],
+    });
+    const [first, second] = layout.familyLines;
+    expect(first.busY).not.toBe(second.busY);
+    for (const family of layout.familyLines) {
+      expect(family.busY).toBeGreaterThan(family.originY);
+      expect(family.busY).toBeLessThan(Math.min(...family.children.map((child) => child.y)));
+    }
+  });
+
+  it('lets families that do not overlap share a line height', () => {
+    const { layout } = positions({
+      ids: ['p1', 'c1', 'p2', 'c2'],
+      spouses: [],
+      parentChild: [
+        { parentId: 'p1', childId: 'c1' },
+        { parentId: 'p2', childId: 'c2' },
+      ],
+    });
+    expect(layout.familyLines[0].busY).toBe(layout.familyLines[1].busY);
+  });
+
   it('shows relatives who married once each and still draws every line', () => {
     const input: TreeInput = {
       ids: ['grandma', 'uncle', 'mom', 'cousin', 'me', 'kid'],

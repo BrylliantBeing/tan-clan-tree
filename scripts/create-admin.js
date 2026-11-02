@@ -29,12 +29,27 @@ async function main() {
   });
 
   try {
-    const personId = crypto.randomUUID();
     await connection.beginTransaction();
-    await connection.execute(
-      `INSERT INTO people (id, full_name, status, reviewed_at) VALUES (?, ?, 'approved', UTC_TIMESTAMP())`,
-      [personId, fullName]
+
+    // Attach to a profile with this exact name if it is already in the tree, so there is no duplicate
+    const [profiles] = await connection.execute(
+      `SELECT p.id
+       FROM people p
+       LEFT JOIN accounts a ON a.person_id = p.id
+       WHERE p.full_name = ? AND p.status = 'approved' AND p.is_deceased = 0 AND a.id IS NULL`,
+      [fullName]
     );
+    if (profiles.length > 1) throw new Error(`More than one profile is named ${fullName}`);
+
+    const personId = profiles[0]?.id ?? crypto.randomUUID();
+    if (profiles[0]) {
+      console.log('Attaching the login to the existing profile with that name');
+    } else {
+      await connection.execute(
+        `INSERT INTO people (id, full_name, status, reviewed_at) VALUES (?, ?, 'approved', UTC_TIMESTAMP())`,
+        [personId, fullName]
+      );
+    }
     await connection.execute(
       `INSERT INTO accounts (id, person_id, email, password_hash, role) VALUES (?, ?, ?, ?, 'admin')`,
       [crypto.randomUUID(), personId, email, await hashPassword(password)]

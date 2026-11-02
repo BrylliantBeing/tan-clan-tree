@@ -1,56 +1,55 @@
-# Welcome to your Expo app 👋
+# Tan Family Tree
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A private family tree website. Relatives join through invite links, and admins approve every addition.
 
-## Get started
+Built with Expo Router (web), API routes, and MySQL. The server runs on Node using the `expo-server` Express adapter.
 
-1. Install dependencies
+## Set up locally
 
-   ```bash
-   npm install
-   ```
+1. Install dependencies with `npm install`.
+2. In hPanel, create a MySQL database. Under **Remote MySQL**, allow your own IP address. Don't use "Any Host".
+3. Fill in `.env`, using `.env.example` as a guide. Use the remote MySQL hostname from hPanel as `DB_HOST`.
+4. Create the tables with `npm run db:migrate`.
+5. Create the first admin with `npm run db:create-admin`. If a profile with exactly that name is already in the tree, the login attaches to it.
+6. Start the app with `npm start`, then press `w` to open it in a browser.
 
-2. Start the app
+## Commands
 
-   ```bash
-   npx expo start
-   ```
+| Command | What it does |
+|---|---|
+| `npm start` | Starts the development server |
+| `npm run build` | Builds the production site into `dist/` |
+| `npm run serve` | Runs the production build. Reads environment variables from the host, not from `.env`. |
+| `npm run db:migrate` | Applies new files from `migrations/` |
+| `npm run db:create-admin` | Creates an approved admin from the command line |
+| `npm test` | Runs unit tests |
+| `npm run test:e2e` | Checks the approval and permission rules against a running build (see below) |
+| `npm run lint`, `npm run typecheck` | Lint and typecheck |
 
-In the output, you'll find options to open the app in a
+## Deploy to Hostinger
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+This needs a plan that includes Node.js Web Apps (Business or Cloud).
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+1. Create a Node.js Web App in hPanel and connect this repository.
+2. Set the build command to `npm run build` and the start command to `npm run serve`.
+3. Add the variables from `.env.example` in the app's environment settings, with `DB_HOST=localhost` and `APP_URL` set to your `https://` domain. `APP_URL` must match the domain exactly, because requests from any other origin are refused.
+4. Run `npm run db:migrate` and `npm run db:create-admin` once, from your computer or the server.
 
-## Get a fresh project
+## Test the approval rules
 
-When you're ready, run:
+`npm run test:e2e` signs in, creates people, and checks that the rules hold. It writes test data, so it refuses to run unless `DB_NAME` contains `test`.
 
-```bash
-npm run reset-project
-```
+1. Create an empty database with `test` in its name.
+2. Put its details in `.env.test.local`, with `APP_URL=http://127.0.0.1:3000`.
+3. Run `node --env-file=.env.test.local scripts/migrate.js`.
+4. Run `npm run build`, then `node --env-file=.env.test.local server.js`.
+5. In another terminal, run `npm run test:e2e`.
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## How the code is organized
 
-### Other setup steps
+- `src/app/` holds screens, and `src/app/api/` holds the API routes.
+- `src/server/` is server-only code. Import it only from `+api.ts` files, so secrets stay out of the browser bundle.
+- `src/features/` holds the tree layout and view, session handling, and shared people components.
+- `migrations/` holds the database schema as numbered SQL files.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Access rules are enforced in the API routes. `Stack.Protected` in the layouts only controls navigation, so every new API route needs its own `requireSession`, `requireApproved`, or `requireAdmin` check.

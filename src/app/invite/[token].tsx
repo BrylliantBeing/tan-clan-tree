@@ -9,8 +9,10 @@ import { RELATION_LABELS } from '@/lib/format';
 
 type InvitePreview = {
   inviterName: string;
-  relativeName: string;
-  relationType: keyof typeof RELATION_LABELS;
+  relativeName: string | null;
+  relationType: keyof typeof RELATION_LABELS | null;
+  // Set when this link gives a login to a profile that is already in the tree
+  claimName: string | null;
 };
 
 export default function AcceptInviteScreen() {
@@ -36,12 +38,19 @@ export default function AcceptInviteScreen() {
     setIsBusy(true);
     setError(null);
     try {
-      await api(`/api/invite-links/${encodeURIComponent(token)}/accept`, {
-        method: 'POST',
-        body: { fullName, birthDate, facebookUrl, email, password },
-      });
+      if (invite?.claimName) {
+        await api(`/api/invite-links/${encodeURIComponent(token)}/claim`, {
+          method: 'POST',
+          body: { facebookUrl, email, password },
+        });
+      } else {
+        await api(`/api/invite-links/${encodeURIComponent(token)}/accept`, {
+          method: 'POST',
+          body: { fullName, birthDate, facebookUrl, email, password },
+        });
+      }
       await refresh();
-      router.replace('/pending');
+      router.replace(invite?.claimName ? '/' : '/pending');
     } catch (caught) {
       setError(errorMessage(caught));
       setIsBusy(false);
@@ -51,7 +60,7 @@ export default function AcceptInviteScreen() {
   if (loadError) {
     return (
       <Screen>
-        <Heading>This invite can't be used</Heading>
+        <Heading>This invite can’t be used</Heading>
         <ErrorMessage message={loadError} />
         <Hint>Please ask your relative for a new link.</Hint>
       </Screen>
@@ -69,11 +78,19 @@ export default function AcceptInviteScreen() {
   return (
     <Screen>
       <Heading>Join the Tan Family Tree</Heading>
-      <Hint>
-        {`${invite.inviterName} invited you to join as the ${RELATION_LABELS[invite.relationType]} of ${invite.relativeName}. An admin will review your details before you can see the tree.`}
-      </Hint>
-      <Field label="Full name" value={fullName} onChangeText={setFullName} autoComplete="name" />
-      <DateField label="Birthdate (optional)" value={birthDate} onChangeText={setBirthDate} />
+      {invite.claimName ? (
+        <Hint>
+          {`${invite.inviterName} created this link for ${invite.claimName}. Your profile is already in the tree, so you only need to set up your login. If you are not ${invite.claimName}, please don’t continue.`}
+        </Hint>
+      ) : (
+        <>
+          <Hint>
+            {`${invite.inviterName} invited you to join as the ${invite.relationType ? RELATION_LABELS[invite.relationType] : 'relative'} of ${invite.relativeName}. An admin will review your details before you can see the tree.`}
+          </Hint>
+          <Field label="Full name" value={fullName} onChangeText={setFullName} autoComplete="name" />
+          <DateField label="Birthdate (optional)" value={birthDate} onChangeText={setBirthDate} />
+        </>
+      )}
       <Field
         label="Facebook link (optional)"
         placeholder="https://facebook.com/your.name"
