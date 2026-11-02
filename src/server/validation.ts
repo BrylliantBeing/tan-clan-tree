@@ -57,6 +57,11 @@ const nameField = z
   .min(1, 'Please enter a name')
   .max(200, 'That name is too long');
 
+const genderField = z.preprocess((value) => (value === '' ? null : value), z.enum(['male', 'female']).nullable());
+
+// Someone new may not have one yet. Edits have to send it, so that an old open page can't blank it by leaving it out.
+const newPersonGender = genderField.default(null);
+
 const idField = z.uuid('Please choose a person');
 
 const relationFields = {
@@ -88,6 +93,7 @@ export const createInviteSchema = z.object(relationFields);
 
 export const acceptInviteSchema = z.object({
   fullName: nameField,
+  gender: newPersonGender,
   birthDate: optionalDate,
   facebookUrl: facebookField,
   email: emailField,
@@ -106,6 +112,7 @@ export const proposeDeceasedSchema = z
   .object({
     ...relationFields,
     fullName: nameField,
+    gender: newPersonGender,
     birthDate: optionalDate,
     deathDate: optionalDate,
     facebookUrl: facebookField,
@@ -114,6 +121,7 @@ export const proposeDeceasedSchema = z
 
 export const updateSelfSchema = z.object({
   fullName: nameField,
+  gender: genderField,
   birthDate: optionalDate,
   facebookUrl: facebookField,
   phone: phoneField,
@@ -142,12 +150,12 @@ const DEATH_DATE_WHILE_LIVING = {
 };
 
 export const adminUpdatePersonSchema = z
-  .object(adminPersonFields)
+  .object({ ...adminPersonFields, gender: genderField })
   .refine(deathNotBeforeBirth, DEATH_BEFORE_BIRTH)
   .refine(deathDateOnlyIfDeceased, DEATH_DATE_WHILE_LIVING);
 
 export const adminAddPersonSchema = z
-  .object({ ...relationFields, ...adminPersonFields })
+  .object({ ...relationFields, ...adminPersonFields, gender: newPersonGender })
   .refine(deathNotBeforeBirth, DEATH_BEFORE_BIRTH)
   .refine(deathDateOnlyIfDeceased, DEATH_DATE_WHILE_LIVING);
 

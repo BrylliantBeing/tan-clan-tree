@@ -199,6 +199,23 @@ export function Choice<Value extends string>({
   );
 }
 
+export type GenderValue = 'male' | 'female' | '';
+
+export function GenderChoice({ value, onChange }: { value: GenderValue; onChange: (value: GenderValue) => void }) {
+  return (
+    <Choice
+      label="Gender (used for Chinese family terms)"
+      options={[
+        { value: 'male', label: 'Male' },
+        { value: 'female', label: 'Female' },
+        { value: '', label: 'Not set' },
+      ]}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
 export function PersonPicker<Person extends { id: string; fullName: string }>({
   label,
   people,

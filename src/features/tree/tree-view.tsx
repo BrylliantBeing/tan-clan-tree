@@ -23,8 +23,10 @@ import { yearSpan } from '@/lib/format';
 import { AddRelativeSheet, type AddZone } from './add-relative-sheet';
 import { type Camera, cameraShowing, toTreePoint, zoomAround } from './camera';
 import { type Hit, hitTest, type Zone } from './hit-zones';
+import { type Relation, relationsTo, relationText } from './kinship';
 import { CARD_HEIGHT, CARD_WIDTH, layoutTree } from './layout';
 import { PersonDetails } from './person-details';
+import { SEARCH_CLEARANCE, TreeSearch } from './tree-search';
 import { isAdoptiveLink, parentsOf, type Person, type TreeData } from './use-tree';
 
 const LINE_PADDING = 40;
@@ -49,6 +51,7 @@ function PersonCard({
   y,
   isSelf,
   isSelected,
+  relation,
   onActivate,
   onFocus,
 }: {
@@ -57,6 +60,7 @@ function PersonCard({
   y: number;
   isSelf: boolean;
   isSelected: boolean;
+  relation: Relation | undefined;
   onActivate: (id: string) => void;
   onFocus: (id: string) => void;
 }) {
@@ -67,7 +71,7 @@ function PersonCard({
     // Keyboards and screen readers still reach this button.
     <Pressable
       role="button"
-      accessibilityLabel={`${person.fullName}${person.isDeceased ? ', deceased' : ''}`}
+      accessibilityLabel={`${person.fullName}${relation ? `, ${relationText(relation)}` : ''}${person.isDeceased ? ', deceased' : ''}`}
       onPress={() => onActivate(person.id)}
       onFocus={() => onFocus(person.id)}
       style={[
@@ -86,6 +90,11 @@ function PersonCard({
         <ThemedText type="name" numberOfLines={2} style={styles.cardName}>
           {person.fullName}
         </ThemedText>
+        {relation ? (
+          <ThemedText type="smallBold" numberOfLines={1} style={[styles.cardRelation, { color: theme.accent }]}>
+            {relation.term ?? relation.english}
+          </ThemedText>
+        ) : null}
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.cardDates}>
           {yearSpan(person)}
         </ThemedText>
@@ -179,6 +188,7 @@ export function TreeView({
   );
   const peopleById = useMemo(() => new Map(tree.people.map((person) => [person.id, person])), [tree]);
   const positionsById = useMemo(() => new Map(layout.people.map((person) => [person.id, person])), [layout]);
+  const relations = useMemo(() => relationsTo(tree, selfId), [tree, selfId]);
 
   const isWide = viewport.width >= WIDE_SCREEN;
   const selected = selectedId ? peopleById.get(selectedId) : undefined;
@@ -216,6 +226,15 @@ export function TreeView({
     if (!isWide) {
       moveCamera(cameraOnPerson(id, viewport.width / 2, viewport.height * SHEET_CARD_HEIGHT, cameraScale.get()));
     }
+  };
+
+  // Someone found by searching could be anywhere, and too small to read if the tree is zoomed out
+  const showSearchResult = (id: string) => {
+    setShowIntro(false);
+    setSelectedId(id);
+    setActiveId(id);
+    const screenY = isWide ? viewport.height / 2 : viewport.height * SHEET_CARD_HEIGHT;
+    moveCamera(cameraOnPerson(id, viewport.width / 2, screenY, Math.max(cameraScale.get(), 1)));
   };
 
   const startAdding = (personId: string, zone: AddZone) => {
@@ -440,6 +459,7 @@ export function TreeView({
                     y={position.y}
                     isSelf={person.id === selfId}
                     isSelected={person.id === selectedId}
+                    relation={relations.get(person.id)}
                     onActivate={selectPerson}
                     onFocus={(id) =>
                       moveCamera(cameraOnPerson(id, viewport.width / 2, viewport.height / 2, cameraScale.get()))
@@ -492,10 +512,18 @@ export function TreeView({
           adoptedBy={parentsOf(tree, selected.id)
             .filter((parent) => isAdoptiveLink(tree, parent.id, selected.id))
             .map((parent) => parent.fullName)}
+          relation={relations.get(selected.id)}
           onAdd={(zone) => startAdding(selected.id, zone)}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
+
+      <TreeSearch
+        people={tree.people}
+        relations={relations}
+        maxHeight={viewport.height / 2}
+        onChoose={showSearchResult}
+      />
 
       {adding && addingPerson ? (
         <AddRelativeSheet
@@ -552,6 +580,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 17,
   },
+  cardRelation: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
   cardDates: {
     fontSize: 12,
     lineHeight: 16,
@@ -576,7 +608,7 @@ const styles = StyleSheet.create({
   },
   intro: {
     position: 'absolute',
-    top: Spacing.three,
+    top: SEARCH_CLEARANCE,
     alignSelf: 'center',
     maxWidth: '90%',
     paddingVertical: Spacing.two,

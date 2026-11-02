@@ -37,9 +37,9 @@ export async function POST(request: Request, { token }: Record<string, string>) 
     const personId = newId();
     const accountId = newId();
     await db.execute(
-      `INSERT INTO people (id, full_name, birth_date, facebook_url, status, created_by)
-       VALUES (?, ?, ?, ?, 'pending', ?)`,
-      [personId, details.fullName, details.birthDate, details.facebookUrl, invite.createdBy]
+      `INSERT INTO people (id, full_name, gender, birth_date, facebook_url, status, created_by)
+       VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      [personId, details.fullName, details.gender, details.birthDate, details.facebookUrl, invite.createdBy]
     );
     await db.execute('INSERT INTO accounts (id, person_id, email, password_hash) VALUES (?, ?, ?, ?)', [
       accountId,

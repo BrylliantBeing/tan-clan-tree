@@ -82,7 +82,7 @@ describe('adding a person as an admin', () => {
 
     const [sql, params] = insertedPerson(db)!;
     expect(sql).toContain(`'approved'`);
-    expect(params.slice(1)).toEqual(['Maria Tan', '1980-02-29', 0, null, null, '+63 917 123 4567', ADMIN, ADMIN]);
+    expect(params.slice(1)).toEqual(['Maria Tan', null, '1980-02-29', 0, null, null, '+63 917 123 4567', ADMIN, ADMIN]);
   });
 
   it('links them to their relative in the same transaction', async () => {
@@ -101,10 +101,10 @@ describe('adding a person as an admin', () => {
 
   it('saves a deceased relative with their date of death', async () => {
     const db = transactionOn(fakeDb([inTree]));
-    const deceased = { ...details, phone: '', isDeceased: true, deathDate: '2010-01-01' };
+    const deceased = { ...details, gender: 'female', phone: '', isDeceased: true, deathDate: '2010-01-01' };
     expect(await statusOf(POST(post(deceased)))).toBe(201);
     const [, params] = insertedPerson(db)!;
-    expect(params.slice(3, 5)).toEqual([1, '2010-01-01']);
+    expect(params.slice(2, 6)).toEqual(['female', '1980-02-29', 1, '2010-01-01']);
   });
 
   it('refuses members, and adds nothing', async () => {

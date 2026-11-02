@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator } from 'react-native';
 
-import { Button, DateField, ErrorMessage, Field, Heading, Hint, Screen } from '@/components/form';
+import { Button, DateField, ErrorMessage, Field, GenderChoice, type GenderValue, Heading, Hint, Screen } from '@/components/form';
 import { useSession } from '@/features/session/session-context';
 import { api, errorMessage } from '@/lib/api';
 import { RELATION_LABELS } from '@/lib/format';
@@ -21,6 +21,7 @@ export default function AcceptInviteScreen() {
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<GenderValue>('');
   const [birthDate, setBirthDate] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
   const [email, setEmail] = useState('');
@@ -46,7 +47,7 @@ export default function AcceptInviteScreen() {
       } else {
         await api(`/api/invite-links/${encodeURIComponent(token)}/accept`, {
           method: 'POST',
-          body: { fullName, birthDate, facebookUrl, email, password },
+          body: { fullName, gender, birthDate, facebookUrl, email, password },
         });
       }
       await refresh();
@@ -88,6 +89,7 @@ export default function AcceptInviteScreen() {
             {`${invite.inviterName} invited you to join as the ${invite.relationType ? RELATION_LABELS[invite.relationType] : 'relative'} of ${invite.relativeName}. An admin will review your details before you can see the tree.`}
           </Hint>
           <Field label="Full name" value={fullName} onChangeText={setFullName} autoComplete="name" />
+          <GenderChoice value={gender} onChange={setGender} />
           <DateField label="Birthdate (optional)" value={birthDate} onChangeText={setBirthDate} />
         </>
       )}

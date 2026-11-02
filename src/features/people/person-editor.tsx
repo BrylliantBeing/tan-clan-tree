@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, Choice, DateField, ErrorMessage, Field, Hint } from '@/components/form';
+import { Button, Choice, DateField, ErrorMessage, Field, GenderChoice, type GenderValue, Hint } from '@/components/form';
 import { type Person } from '@/features/tree/use-tree';
 import { api, errorMessage } from '@/lib/api';
 
@@ -17,6 +17,7 @@ export function PersonEditor({
   onSaved: () => Promise<void>;
 }) {
   const [fullName, setFullName] = useState(person.fullName);
+  const [gender, setGender] = useState<GenderValue>(person.gender ?? '');
   const [birthDate, setBirthDate] = useState(person.birthDate ?? '');
   const [phone, setPhone] = useState(person.phone ?? '');
   const [facebookUrl, setFacebookUrl] = useState(person.facebookUrl ?? '');
@@ -31,7 +32,7 @@ export function PersonEditor({
     setError(null);
     setMessage(null);
     try {
-      const details = { fullName, birthDate, facebookUrl, phone };
+      const details = { fullName, gender, birthDate, facebookUrl, phone };
       await api(`/api/people/${person.id}`, {
         method: 'PATCH',
         body: isAdmin ? { ...details, isDeceased, deathDate: isDeceased ? deathDate : null } : details,
@@ -48,6 +49,7 @@ export function PersonEditor({
   return (
     <>
       <Field label="Full name" value={fullName} onChangeText={setFullName} autoComplete="name" />
+      <GenderChoice value={gender} onChange={setGender} />
       <DateField label="Birthdate" value={birthDate} onChangeText={setBirthDate} />
       <Field
         label="Contact number"

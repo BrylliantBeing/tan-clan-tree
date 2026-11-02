@@ -309,10 +309,11 @@ async function main() {
   });
 
   await step('a contact number is saved and shown to the family, and unsafe ones are refused', async () => {
-    const details = { fullName: `alice ${RUN}`, birthDate: '1990-05-17', facebookUrl: '' };
+    const details = { fullName: `alice ${RUN}`, gender: 'female', birthDate: '1990-05-17', facebookUrl: '' };
     assert.equal((await alice.patch(`/api/people/${aliceId}`, { ...details, phone: '+63 917 123 4567' })).status, 200);
     const { body } = await spouse2.browser.get('/api/tree');
     assert.equal(body.people.find((person) => person.id === aliceId).phone, '+63 917 123 4567');
+    assert.equal(body.people.find((person) => person.id === aliceId).gender, 'female');
     assert.equal((await alice.patch(`/api/people/${aliceId}`, { ...details, phone: 'javascript:alert(1)' })).status, 400);
     assert.equal((await alice.patch(`/api/people/${aliceId}`, details)).status, 400);
   });
@@ -417,6 +418,7 @@ async function main() {
     const token = tokenOf((await admin.post('/api/admin/claim-invites', { personId: profileId })).body.url);
     const update = await admin.patch(`/api/people/${profileId}`, {
       fullName: `Second Profile ${RUN}`,
+      gender: '',
       birthDate: '',
       facebookUrl: '',
       phone: '',
@@ -428,11 +430,12 @@ async function main() {
   });
 
   await step('members can edit only themselves, and cannot change their own status', async () => {
-    const details = { fullName: 'Hacked', birthDate: '', facebookUrl: '', phone: '' };
+    const details = { fullName: 'Hacked', gender: '', birthDate: '', facebookUrl: '', phone: '' };
     assert.equal((await alice.patch(`/api/people/${deceasedId}`, details)).status, 403);
     assert.equal((await alice.patch(`/api/people/${adminPersonId}`, details)).status, 403);
     const own = await alice.patch(`/api/people/${aliceId}`, {
       fullName: `Alice Edited ${RUN}`,
+      gender: 'female',
       birthDate: '1990-05-17',
       facebookUrl: '',
       phone: '',
@@ -455,6 +458,7 @@ async function main() {
   await step('unsafe Facebook links are refused', async () => {
     const result = await alice.patch(`/api/people/${aliceId}`, {
       fullName: 'Alice',
+      gender: '',
       birthDate: '',
       facebookUrl: 'javascript:alert(1)',
       phone: '',
@@ -574,6 +578,7 @@ async function main() {
     const token = await invite(spouse1.browser, 'child', spouse1.id);
     const result = await admin.patch(`/api/people/${spouse1.id}`, {
       fullName: `spouse1 ${RUN}`,
+      gender: '',
       birthDate: '1990-05-17',
       facebookUrl: '',
       phone: '',

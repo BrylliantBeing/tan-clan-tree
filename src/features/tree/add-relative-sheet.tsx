@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { Button, Choice, DateField, ErrorMessage, Field, Hint } from '@/components/form';
+import { Button, Choice, DateField, ErrorMessage, Field, GenderChoice, type GenderValue, Hint } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radius, Spacing } from '@/constants/theme';
@@ -60,6 +60,7 @@ function InviteForm({ relation }: { relation: Relation }) {
 
 function DeceasedForm({ relation }: { relation: Relation }) {
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<GenderValue>('');
   const [birthDate, setBirthDate] = useState('');
   const [deathDate, setDeathDate] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
@@ -73,7 +74,7 @@ function DeceasedForm({ relation }: { relation: Relation }) {
     try {
       await api('/api/people', {
         method: 'POST',
-        body: { ...relation, fullName, birthDate, deathDate, facebookUrl },
+        body: { ...relation, fullName, gender, birthDate, deathDate, facebookUrl },
       });
       setMessage(`${fullName} was sent to an admin for approval.`);
     } catch (caught) {
@@ -88,6 +89,7 @@ function DeceasedForm({ relation }: { relation: Relation }) {
     <>
       <Hint>Leave a date blank if you don’t know it. Once approved, an admin looks after this profile.</Hint>
       <Field label="Full name" value={fullName} onChangeText={setFullName} />
+      <GenderChoice value={gender} onChange={setGender} />
       <DateField label="Birthdate (optional)" value={birthDate} onChangeText={setBirthDate} />
       <DateField label="Date of death (optional)" value={deathDate} onChangeText={setDeathDate} />
       <Field
@@ -106,6 +108,7 @@ function DeceasedForm({ relation }: { relation: Relation }) {
 
 function AdminAddForm({ relation, onAdded }: { relation: Relation; onAdded: (id: string) => Promise<void> }) {
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<GenderValue>('');
   const [birthDate, setBirthDate] = useState('');
   const [phone, setPhone] = useState('');
   const [facebookUrl, setFacebookUrl] = useState('');
@@ -123,6 +126,7 @@ function AdminAddForm({ relation, onAdded }: { relation: Relation; onAdded: (id:
         body: {
           ...relation,
           fullName,
+          gender,
           birthDate,
           facebookUrl,
           phone: isDeceased ? '' : phone,
@@ -142,6 +146,7 @@ function AdminAddForm({ relation, onAdded }: { relation: Relation; onAdded: (id:
     <>
       <Hint>They join the tree right away. Only the name is required.</Hint>
       <Field label="Full name" value={fullName} onChangeText={setFullName} />
+      <GenderChoice value={gender} onChange={setGender} />
       <Choice
         label="Status"
         options={[

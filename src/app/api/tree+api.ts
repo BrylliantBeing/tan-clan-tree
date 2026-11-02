@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const db = getPool();
 
   const [people] = await db.query<Row[]>(
-    `SELECT p.id, p.full_name AS fullName, p.birth_date AS birthDate, p.death_date AS deathDate,
+    `SELECT p.id, p.full_name AS fullName, p.gender, p.birth_date AS birthDate, p.death_date AS deathDate,
        p.is_deceased = 1 AS isDeceased, p.facebook_url AS facebookUrl, p.phone,
        UNIX_TIMESTAMP(ph.updated_at) AS photoVersion,
        a.id IS NOT NULL AS hasAccount, COALESCE(a.role, 'member') AS role

@@ -10,6 +10,7 @@ import { type SpouseLink } from './layout';
 export type Person = {
   id: string;
   fullName: string;
+  gender: 'male' | 'female' | null;
   birthDate: string | null;
   deathDate: string | null;
   isDeceased: boolean;

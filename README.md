@@ -42,6 +42,8 @@ When an update adds a file to `migrations/`, run `npm run db:migrate` before dep
 The app has two tabs, Tree and Profile. The tree opens centered on whoever is signed in, and can be dragged and zoomed.
 
 - Tap a person's card to see their details.
+- Search from the bar at the top, by name, by Chinese term such as "Achi", or by English such as "cousin". Choosing a result moves the tree to that person.
+- Each card shows what that person is to whoever is signed in, using Philippine Hokkien terms such as Angkong or Ahia (see `src/features/tree/kinship.ts`). The terms depend on people's gender and birthdates, so a card shows the English until those are filled in.
 - Tap the top edge of a card to add a parent, the bottom edge to add a child, or either side to add a spouse or sibling. The tap area reaches a little past the card (see `src/features/tree/hit-zones.ts`).
 - Everyone edits their own details from the Profile tab. Admins manage other people through the link in a person's details, and review additions from the Profile tab.
 - When an admin adds someone, they can enter the details themselves. That person joins the tree right away, with no invite or review. They have no login until an admin creates a login link from their Manage page.

@@ -11,7 +11,9 @@ import { useTheme } from '@/hooks/use-theme';
 import { formatDate } from '@/lib/format';
 
 import { type AddZone } from './add-relative-sheet';
+import { type Relation, relationText } from './kinship';
 import { CARD_HEIGHT, CARD_WIDTH } from './layout';
+import { SEARCH_CLEARANCE } from './tree-search';
 import { type Person } from './use-tree';
 
 const POPOVER_WIDTH = 300;
@@ -28,6 +30,7 @@ export function PersonDetails({
   isSelf,
   isAdmin,
   adoptedBy,
+  relation,
   onAdd,
   onClose,
 }: {
@@ -41,6 +44,7 @@ export function PersonDetails({
   isSelf: boolean;
   isAdmin: boolean;
   adoptedBy: string[];
+  relation: Relation | undefined;
   onAdd: (zone: AddZone) => void;
   onClose: () => void;
 }) {
@@ -60,7 +64,7 @@ export function PersonDetails({
     return {
       transform: [
         { translateX: Math.max(EDGE_GAP, Math.min(room, beside)) },
-        { translateY: Math.max(EDGE_GAP, Math.min(lowest, cardMiddle - height.get() / 2)) },
+        { translateY: Math.max(SEARCH_CLEARANCE, Math.min(lowest, cardMiddle - height.get() / 2)) },
       ],
     };
   });
@@ -86,6 +90,11 @@ export function PersonDetails({
                 {person.fullName}
               </ThemedText>
               {isSelf ? <Hint>This is you</Hint> : null}
+              {relation && !isSelf ? (
+                <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                  {relationText(relation)}
+                </ThemedText>
+              ) : null}
             </View>
             <Pressable
               role="button"
@@ -97,6 +106,9 @@ export function PersonDetails({
           </View>
 
           <View style={styles.rows}>
+            {relation?.incomplete ? (
+              <Hint>The Chinese term needs a gender or birthdate that isn’t in the tree yet.</Hint>
+            ) : null}
             {person.birthDate ? <ThemedText type="small">{`Born ${formatDate(person.birthDate)}`}</ThemedText> : null}
             {person.isDeceased ? (
               <ThemedText type="small">

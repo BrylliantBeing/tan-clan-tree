@@ -100,8 +100,29 @@ describe('date ordering', () => {
   });
 });
 
+describe('gender', () => {
+  const details = { fullName: 'Maria Tan', birthDate: '', facebookUrl: '', phone: '' };
+
+  it('treats a blank choice as not set', () => {
+    expect(updateSelfSchema.parse({ ...details, gender: '' }).gender).toBeNull();
+    expect(updateSelfSchema.parse({ ...details, gender: 'female' }).gender).toBe('female');
+  });
+
+  it('refuses anything other than the choices offered', () => {
+    expect(updateSelfSchema.safeParse({ ...details, gender: 'other' }).success).toBe(false);
+  });
+
+  it('has to be sent with an edit, so an old open page cannot blank it', () => {
+    expect(updateSelfSchema.safeParse(details).success).toBe(false);
+  });
+
+  it('can be left out when someone new joins', () => {
+    expect(acceptInviteSchema.parse(invitee).gender).toBeNull();
+  });
+});
+
 describe('contact numbers', () => {
-  const details = { fullName: 'Maria Tan', birthDate: '', facebookUrl: '' };
+  const details = { fullName: 'Maria Tan', gender: '', birthDate: '', facebookUrl: '' };
 
   it.each(['+63 917 123 4567', '0917-123-4567', '(02) 8123 4567', '09171234567'])('accepts %s', (phone) => {
     expect(updateSelfSchema.safeParse({ ...details, phone }).success).toBe(true);
