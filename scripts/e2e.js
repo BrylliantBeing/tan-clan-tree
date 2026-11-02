@@ -486,6 +486,37 @@ async function main() {
     assert.equal((await admin.delete('/api/admin/relationships', link)).status, 200);
   });
 
+  await step('an admin can add someone straight to the tree, and members cannot', async () => {
+    const details = {
+      relationType: 'child',
+      relativeId: aliceId,
+      otherParentId: null,
+      fullName: `Direct ${RUN}`,
+      birthDate: '2001-02-03',
+      facebookUrl: '',
+      phone: '+63 917 123 4567',
+      isDeceased: false,
+      deathDate: '',
+    };
+    assert.equal((await alice.post('/api/admin/people', details)).status, 403);
+    assert.equal((await admin.request('POST', '/api/admin/people', details, { origin: 'https://evil.example' })).status, 403);
+    assert.equal((await admin.post('/api/admin/people', { ...details, deathDate: '2010-01-01' })).status, 400);
+
+    const added = await admin.post('/api/admin/people', details);
+    assert.equal(added.status, 201, JSON.stringify(added.body));
+    const { id } = added.body;
+
+    const { body } = await alice.get('/api/tree');
+    const person = body.people.find((candidate) => candidate.id === id);
+    assert.equal(person.phone, details.phone);
+    assert.equal(person.hasAccount, false);
+    assert.ok(body.parentChild.some((link) => link.parentId === aliceId && link.childId === id));
+    const { approvals } = (await admin.get('/api/admin/approvals')).body;
+    assert.ok(!approvals.some((approval) => approval.id === id));
+
+    assert.equal((await admin.post('/api/admin/claim-invites', { personId: id })).status, 201);
+  });
+
   await step('the last admin cannot be removed, but a second admin makes it possible', async () => {
     const [[{ total }]] = await db.execute(`SELECT COUNT(*) AS total FROM accounts WHERE role = 'admin' AND disabled_at IS NULL`);
     assert.equal(Number(total), 1, 'this step expects a freshly migrated test database');

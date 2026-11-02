@@ -1,12 +1,11 @@
-import { Link } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, type SharedValue, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 
 import { ExternalLink } from '@/components/external-link';
-import { Button, Hint } from '@/components/form';
+import { Button, Hint, TextLink } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { Avatar } from '@/features/people/avatar';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDate } from '@/lib/format';
@@ -73,11 +72,15 @@ export function PersonDetails({
       <Animated.View entering={FadeIn.duration(120)}>
         <ThemedView
           type="backgroundElement"
-          style={[styles.panel, !isWide && styles.panelSheet, { borderColor: theme.border }]}>
+          style={[
+            styles.panel,
+            !isWide && styles.panelSheet,
+            { borderColor: theme.border, boxShadow: `0 8px 24px ${theme.shadow}` },
+          ]}>
           <View style={styles.header}>
             <Avatar person={person} size={64} />
             <View style={styles.name}>
-              <ThemedText type="smallBold" role="heading" style={styles.nameText}>
+              <ThemedText type="name" role="heading" style={styles.nameText}>
                 {person.fullName}
               </ThemedText>
               {isSelf ? <Hint>This is you</Hint> : null}
@@ -99,12 +102,12 @@ export function PersonDetails({
               </ThemedText>
             ) : null}
             {person.phone ? (
-              <Link href={`tel:${person.phone.replace(/[^+0-9]/g, '')}`} style={[styles.link, { color: theme.accent }]}>
+              <TextLink href={`tel:${person.phone.replace(/[^+0-9]/g, '')}`} style={styles.link}>
                 {person.phone}
-              </Link>
+              </TextLink>
             ) : null}
             {person.facebookUrl ? (
-              <ExternalLink href={person.facebookUrl as never} style={[styles.link, { color: theme.accent }]}>
+              <ExternalLink href={person.facebookUrl as never} style={styles.link}>
                 Facebook profile
               </ExternalLink>
             ) : null}
@@ -118,16 +121,14 @@ export function PersonDetails({
           </View>
 
           {isSelf ? (
-            <Link href="/profile" style={[styles.link, { color: theme.accent }]}>
+            <TextLink href="/profile" style={styles.link}>
               Edit your profile
-            </Link>
+            </TextLink>
           ) : null}
           {isAdmin ? (
-            <Link
-              href={{ pathname: '/person/[id]', params: { id: person.id } }}
-              style={[styles.link, { color: theme.accent }]}>
+            <TextLink href={{ pathname: '/person/[id]', params: { id: person.id } }} style={styles.link}>
               Manage this person
-            </Link>
+            </TextLink>
           ) : null}
         </ThemedView>
       </Animated.View>
@@ -151,9 +152,8 @@ const styles = StyleSheet.create({
   panel: {
     gap: Spacing.three,
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.medium,
     borderWidth: 1,
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
   },
   panelSheet: {
     borderBottomLeftRadius: 0,

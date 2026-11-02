@@ -123,20 +123,33 @@ export const photoSchema = z.object({
   data: z.base64('Please choose a JPEG, PNG or WebP picture'),
 });
 
+const adminPersonFields = {
+  fullName: nameField,
+  birthDate: optionalDate,
+  facebookUrl: facebookField,
+  phone: phoneField,
+  isDeceased: z.boolean(),
+  deathDate: optionalDate,
+};
+
+function deathDateOnlyIfDeceased(person: { isDeceased: boolean; deathDate?: string | null }) {
+  return person.isDeceased || !person.deathDate;
+}
+
+const DEATH_DATE_WHILE_LIVING = {
+  message: 'Only deceased relatives can have a death date',
+  path: ['deathDate'],
+};
+
 export const adminUpdatePersonSchema = z
-  .object({
-    fullName: nameField,
-    birthDate: optionalDate,
-    facebookUrl: facebookField,
-    phone: phoneField,
-    isDeceased: z.boolean(),
-    deathDate: optionalDate,
-  })
+  .object(adminPersonFields)
   .refine(deathNotBeforeBirth, DEATH_BEFORE_BIRTH)
-  .refine((person) => person.isDeceased || !person.deathDate, {
-    message: 'Only deceased relatives can have a death date',
-    path: ['deathDate'],
-  });
+  .refine(deathDateOnlyIfDeceased, DEATH_DATE_WHILE_LIVING);
+
+export const adminAddPersonSchema = z
+  .object({ ...relationFields, ...adminPersonFields })
+  .refine(deathNotBeforeBirth, DEATH_BEFORE_BIRTH)
+  .refine(deathDateOnlyIfDeceased, DEATH_DATE_WHILE_LIVING);
 
 export const relationshipSchema = z
   .object({

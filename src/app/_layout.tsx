@@ -1,10 +1,44 @@
+import { Lora_600SemiBold } from '@expo-google-fonts/lora/600SemiBold';
+import { SourceSans3_400Regular } from '@expo-google-fonts/source-sans-3/400Regular';
+import { SourceSans3_600SemiBold } from '@expo-google-fonts/source-sans-3/600SemiBold';
+import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
-import { ActivityIndicator, StyleSheet, useColorScheme, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
+import { ActivityIndicator, Platform, StyleSheet, useColorScheme, View } from 'react-native';
 
 import { Button, ErrorMessage } from '@/components/form';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Colors, FontFaces, Spacing } from '@/constants/theme';
 import { SessionProvider, useSession } from '@/features/session/session-context';
+
+const IS_WEB = Platform.OS === 'web';
+
+if (!IS_WEB) SplashScreen.preventAutoHideAsync();
+
+const LIGHT_THEME = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: Colors.light.accent,
+    background: Colors.light.background,
+    card: Colors.light.backgroundElement,
+    text: Colors.light.text,
+    border: Colors.light.border,
+  },
+};
+
+const DARK_THEME = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: Colors.dark.accent,
+    background: Colors.dark.background,
+    card: Colors.dark.backgroundElement,
+    text: Colors.dark.text,
+    border: Colors.dark.border,
+  },
+};
 
 function RootNavigator() {
   const { status, loadFailed, refresh } = useSession();
@@ -49,8 +83,23 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [fontsLoaded, fontError] = useFonts({
+    [FontFaces.serif]: Lora_600SemiBold,
+    [FontFaces.sans]: SourceSans3_400Regular,
+    [FontFaces.sansBold]: SourceSans3_600SemiBold,
+  });
+  // A font that fails to load shouldn't lock anyone out, so carry on with the system fonts
+  const fontsSettled = fontsLoaded || Boolean(fontError);
+
+  useEffect(() => {
+    if (!IS_WEB && fontsSettled) SplashScreen.hide();
+  }, [fontsSettled]);
+
+  // The web has fallback fonts in global.css and no splash screen to wait behind
+  if (!IS_WEB && !fontsSettled) return null;
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? DARK_THEME : LIGHT_THEME}>
       <SessionProvider>
         <RootNavigator />
       </SessionProvider>

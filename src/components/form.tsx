@@ -1,8 +1,9 @@
+import { Link } from 'expo-router';
 import { type ComponentProps, type PropsWithChildren, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Fonts, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from './themed-text';
@@ -46,11 +47,19 @@ export function Hint({ children }: PropsWithChildren) {
 }
 
 export function Card({ children }: PropsWithChildren) {
+  const theme = useTheme();
   return (
-    <ThemedView type="backgroundElement" style={styles.card}>
+    <ThemedView
+      type="backgroundElement"
+      style={[styles.card, { borderColor: theme.border, boxShadow: `0 1px 3px ${theme.shadow}` }]}>
       {children}
     </ThemedView>
   );
+}
+
+export function TextLink({ style, ...rest }: ComponentProps<typeof Link>) {
+  const theme = useTheme();
+  return <Link {...rest} style={[styles.link, { color: theme.accent }, style]} />;
 }
 
 type FieldProps = ComponentProps<typeof TextInput> & { label: string; hint?: string };
@@ -63,7 +72,11 @@ export function Field({ label, hint, style, ...inputProps }: FieldProps) {
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={theme.textSecondary}
-        style={[styles.input, { color: theme.text, borderColor: theme.border }, style]}
+        style={[
+          styles.input,
+          { color: theme.text, borderColor: theme.border, backgroundColor: theme.backgroundElement },
+          style,
+        ]}
         {...inputProps}
       />
       {hint ? <Hint>{hint}</Hint> : null}
@@ -251,20 +264,29 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   sectionHeading: {
+    fontFamily: Fonts.serif,
     fontSize: 16,
     marginTop: Spacing.two,
   },
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Radius.small,
     gap: Spacing.two,
+  },
+  link: {
+    fontFamily: Fonts.sans,
+    fontSize: 16,
+    lineHeight: 24,
+    textDecorationLine: 'underline',
   },
   field: {
     gap: Spacing.one,
   },
   input: {
     borderWidth: 1,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
+    fontFamily: Fonts.sans,
     paddingHorizontal: Spacing.three,
     paddingVertical: 10,
     // 16px stops phone browsers from zooming the page when a field is focused
@@ -274,7 +296,7 @@ const styles = StyleSheet.create({
   button: {
     minHeight: 44,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -290,7 +312,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
     borderWidth: 1,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
     paddingHorizontal: Spacing.three,
   },
   pickerRow: {

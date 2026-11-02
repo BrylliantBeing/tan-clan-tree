@@ -13,8 +13,9 @@ import {
 import { Button, Choice, DateField, ErrorMessage, Field, Hint } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { InviteLinkCard } from '@/features/people/invite-link-card';
+import { useTheme } from '@/hooks/use-theme';
 import { api, errorMessage } from '@/lib/api';
 
 import { type Zone } from './hit-zones';
@@ -103,24 +104,115 @@ function DeceasedForm({ relation }: { relation: Relation }) {
   );
 }
 
+function AdminAddForm({ relation, onAdded }: { relation: Relation; onAdded: (id: string) => Promise<void> }) {
+  const [fullName, setFullName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [phone, setPhone] = useState('');
+  const [facebookUrl, setFacebookUrl] = useState('');
+  const [isDeceased, setIsDeceased] = useState(false);
+  const [deathDate, setDeathDate] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const submit = async () => {
+    setIsBusy(true);
+    setError(null);
+    try {
+      const { id } = await api<{ id: string }>('/api/admin/people', {
+        method: 'POST',
+        body: {
+          ...relation,
+          fullName,
+          birthDate,
+          facebookUrl,
+          phone: isDeceased ? '' : phone,
+          isDeceased,
+          deathDate: isDeceased ? deathDate : '',
+        },
+      });
+      await onAdded(id);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <Hint>They join the tree right away. Only the name is required.</Hint>
+      <Field label="Full name" value={fullName} onChangeText={setFullName} />
+      <Choice
+        label="Status"
+        options={[
+          { value: 'living', label: 'Living' },
+          { value: 'deceased', label: 'Deceased' },
+        ]}
+        value={isDeceased ? 'deceased' : 'living'}
+        onChange={(value) => setIsDeceased(value === 'deceased')}
+      />
+      <DateField label="Birthdate (optional)" value={birthDate} onChangeText={setBirthDate} />
+      {isDeceased ? (
+        <DateField label="Date of death (optional)" value={deathDate} onChangeText={setDeathDate} />
+      ) : (
+        <Field
+          label="Contact number (optional)"
+          placeholder="+63 917 123 4567"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          hint="Everyone in the family tree can see this."
+        />
+      )}
+      <Field
+        label="Facebook link (optional)"
+        placeholder="https://facebook.com/their.name"
+        value={facebookUrl}
+        onChangeText={setFacebookUrl}
+        autoCapitalize="none"
+        keyboardType="url"
+      />
+      <ErrorMessage message={error} />
+      <Button label="Add to the tree" busy={isBusy} onPress={submit} />
+    </>
+  );
+}
+
 const INITIAL_RELATION: Record<AddZone, RelationType> = { top: 'parent', bottom: 'child', side: 'spouse' };
+
+type Mode = 'details' | 'invite' | 'deceased';
+
+const ADMIN_MODES: { value: Mode; label: string }[] = [
+  { value: 'details', label: 'Enter their details' },
+  { value: 'invite', label: 'Send an invite link' },
+];
+
+const MEMBER_MODES: { value: Mode; label: string }[] = [
+  { value: 'invite', label: 'Living' },
+  { value: 'deceased', label: 'Deceased' },
+];
 
 export function AddRelativeSheet({
   tree,
   person,
   zone,
+  isAdmin,
+  onAdded,
   onClose,
 }: {
   tree: TreeData;
   person: Person;
   zone: AddZone;
+  isAdmin: boolean;
+  onAdded: (id: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const theme = useTheme();
   const { width } = useWindowDimensions();
   const spouses = spousesOf(tree, person.id);
   const parents = parentsOf(tree, person.id);
   const [relationType, setRelationType] = useState(INITIAL_RELATION[zone]);
-  const [mode, setMode] = useState<'invite' | 'deceased'>('invite');
+  const [mode, setMode] = useState<Mode>(isAdmin ? 'details' : 'invite');
   // With one spouse, they are almost always the other parent. With several, it has to be a real choice.
   const [otherParentId, setOtherParentId] = useState(spouses.length === 1 ? spouses[0].id : NO_OTHER_PARENT);
 
@@ -136,12 +228,12 @@ export function AddRelativeSheet({
     <Modal transparent visible animationType="fade" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[styles.backdrop, width >= WIDE_SCREEN ? styles.backdropWide : null]}>
+        style={[styles.backdrop, { backgroundColor: theme.scrim }, width >= WIDE_SCREEN ? styles.backdropWide : null]}>
         <Pressable accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={onClose} />
         <ThemedView style={[styles.sheet, width >= WIDE_SCREEN ? styles.sheetWide : null]}>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.header}>
-              <ThemedText type="smallBold" role="heading" style={styles.title}>
+              <ThemedText type="name" role="heading" style={styles.title}>
                 {`Add ${relationType} of ${person.fullName}`}
               </ThemedText>
               <Button label="Close" variant="secondary" onPress={onClose} />
@@ -184,20 +276,15 @@ export function AddRelativeSheet({
                   />
                 ) : null}
                 <Choice
-                  label="Are they living?"
-                  options={[
-                    { value: 'invite', label: 'Living' },
-                    { value: 'deceased', label: 'Deceased' },
-                  ]}
+                  label={isAdmin ? 'How do you want to add them?' : 'Are they living?'}
+                  options={isAdmin ? ADMIN_MODES : MEMBER_MODES}
                   value={mode}
                   onChange={setMode}
                 />
+                {mode === 'details' ? <AdminAddForm relation={relation} onAdded={onAdded} /> : null}
                 {/* The key starts a fresh form, so a finished one doesn't carry over to a different choice */}
-                {mode === 'invite' ? (
-                  <InviteForm key={JSON.stringify(relation)} relation={relation} />
-                ) : (
-                  <DeceasedForm key={JSON.stringify(relation)} relation={relation} />
-                )}
+                {mode === 'invite' ? <InviteForm key={JSON.stringify(relation)} relation={relation} /> : null}
+                {mode === 'deceased' ? <DeceasedForm key={JSON.stringify(relation)} relation={relation} /> : null}
               </>
             ) : null}
           </ScrollView>
@@ -211,7 +298,6 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   backdropWide: {
     alignItems: 'center',
@@ -220,14 +306,14 @@ const styles = StyleSheet.create({
   },
   sheet: {
     maxHeight: '88%',
-    borderTopLeftRadius: Spacing.three,
-    borderTopRightRadius: Spacing.three,
+    borderTopLeftRadius: Radius.medium,
+    borderTopRightRadius: Radius.medium,
     overflow: 'hidden',
   },
   sheetWide: {
     width: '100%',
     maxWidth: 460,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.medium,
   },
   content: {
     gap: Spacing.three,

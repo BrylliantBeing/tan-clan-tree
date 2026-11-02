@@ -14,7 +14,7 @@ import Svg, { Path } from 'react-native-svg';
 import { Hint } from '@/components/form';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { Avatar } from '@/features/people/avatar';
 import { useSession } from '@/features/session/session-context';
 import { useTheme } from '@/hooks/use-theme';
@@ -78,11 +78,12 @@ function PersonCard({
           backgroundColor: theme.backgroundElement,
           borderColor: highlighted ? theme.accent : theme.border,
           borderWidth: highlighted ? 2 : 1,
+          boxShadow: `0 1px 3px ${theme.shadow}`,
         },
       ]}>
       <Avatar person={person} size={48} />
       <View style={styles.cardText}>
-        <ThemedText type="smallBold" numberOfLines={2} style={styles.cardName}>
+        <ThemedText type="name" numberOfLines={2} style={styles.cardName}>
           {person.fullName}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.cardDates}>
@@ -125,7 +126,14 @@ function ControlButton({ label, glyph, onPress }: { label: string; glyph: string
       role="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={[styles.control, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      style={[
+        styles.control,
+        {
+          backgroundColor: theme.backgroundElement,
+          borderColor: theme.border,
+          boxShadow: `0 1px 3px ${theme.shadow}`,
+        },
+      ]}>
       <ThemedText type="smallBold" style={styles.controlText}>
         {glyph}
       </ThemedText>
@@ -133,7 +141,15 @@ function ControlButton({ label, glyph, onPress }: { label: string; glyph: string
   );
 }
 
-export function TreeView({ tree, selfId }: { tree: TreeData; selfId: string }) {
+export function TreeView({
+  tree,
+  selfId,
+  onTreeChanged,
+}: {
+  tree: TreeData;
+  selfId: string;
+  onTreeChanged: () => Promise<void>;
+}) {
   const theme = useTheme();
   const { user } = useSession();
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
@@ -145,6 +161,7 @@ export function TreeView({ tree, selfId }: { tree: TreeData; selfId: string }) {
 
   const viewportRef = useRef<ComponentRef<typeof View>>(null);
   const didCenter = useRef(false);
+  const cameraTargetId = useRef<string | null>(null);
   const cameraX = useSharedValue(0);
   const cameraY = useSharedValue(0);
   const cameraScale = useSharedValue(1);
@@ -207,6 +224,25 @@ export function TreeView({ tree, selfId }: { tree: TreeData; selfId: string }) {
     setActiveId(personId);
     setAdding({ personId, zone });
   };
+
+  const finishAdding = async (id: string) => {
+    // Set before reloading, because the new layout can render before the reload's promise resolves here
+    cameraTargetId.current = id;
+    await onTreeChanged();
+    setAdding(null);
+    setSelectedId(id);
+    setActiveId(id);
+  };
+
+  // Adding someone can rearrange the tree, so bring them into view once the new layout has their position
+  useEffect(() => {
+    const id = cameraTargetId.current;
+    if (!id || !positionsById.has(id)) return;
+    cameraTargetId.current = null;
+    const screenY = isWide ? viewport.height / 2 : viewport.height * SHEET_CARD_HEIGHT;
+    moveCamera(cameraOnPerson(id, viewport.width / 2, screenY, cameraScale.get()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only a new layout can give the target a position
+  }, [positionsById]);
 
   const handleTap = (screenX: number, screenY: number) => {
     const point = toTreePoint(currentCamera(), screenX, screenY);
@@ -389,8 +425,9 @@ export function TreeView({ tree, selfId }: { tree: TreeData; selfId: string }) {
                     key={path}
                     d={path}
                     transform={`translate(${LINE_PADDING} ${LINE_PADDING})`}
-                    stroke={theme.textSecondary}
+                    stroke={theme.treeLine}
                     strokeWidth={1.5}
+                    strokeLinejoin="round"
                     fill="none"
                   />
                 ))}
@@ -426,7 +463,10 @@ export function TreeView({ tree, selfId }: { tree: TreeData; selfId: string }) {
       </GestureDetector>
 
       {showIntro ? (
-        <ThemedView type="backgroundElement" style={styles.intro} pointerEvents="none">
+        <ThemedView
+          type="backgroundElement"
+          style={[styles.intro, { borderColor: theme.border, boxShadow: `0 1px 3px ${theme.shadow}` }]}
+          pointerEvents="none">
           <Hint>Tap someone to see their details. Tap the edge of their card to add family.</Hint>
         </ThemedView>
       ) : null}
@@ -463,6 +503,8 @@ export function TreeView({ tree, selfId }: { tree: TreeData; selfId: string }) {
           tree={tree}
           person={addingPerson}
           zone={adding.zone}
+          isAdmin={user?.role === 'admin'}
+          onAdded={finishAdding}
           onClose={() => setAdding(null)}
         />
       ) : null}
@@ -498,7 +540,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.small,
     paddingHorizontal: Spacing.two,
     overflow: 'hidden',
     pointerEvents: 'none',
@@ -507,7 +549,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardName: {
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 17,
   },
   cardDates: {
     fontSize: 12,
@@ -538,7 +581,8 @@ const styles = StyleSheet.create({
     maxWidth: '90%',
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderRadius: Radius.small,
   },
   controls: {
     position: 'absolute',
