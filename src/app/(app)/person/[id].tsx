@@ -1,4 +1,4 @@
-import { Link, useLocalSearchParams } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
@@ -162,6 +162,35 @@ function LoginLinkCreator({ person }: { person: Person }) {
   );
 }
 
+function RemovePerson({ person }: { person: Person }) {
+  const [error, setError] = useState<string | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+
+  const remove = async () => {
+    setIsBusy(true);
+    setError(null);
+    try {
+      await api(`/api/people/${person.id}`, { method: 'DELETE' });
+      router.dismissTo('/');
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <SectionHeading>Admin: remove from tree</SectionHeading>
+      <Hint>
+        {`This permanently deletes ${person.fullName}'s profile, photo, login and invite links, and can't be undone. Their relatives stay in the tree, but anyone connected only through them will appear as a separate group.`}
+      </Hint>
+      <ErrorMessage message={error} />
+      <ConfirmButton label="Remove from tree" confirmLabel="Remove permanently" busy={isBusy} onConfirm={remove} />
+    </Card>
+  );
+}
+
 // Only admins can open this screen. Everyone edits their own details from the Profile tab.
 export default function PersonScreen() {
   const theme = useTheme();
@@ -211,6 +240,7 @@ export default function PersonScreen() {
       </Card>
       {!person.hasAccount && !person.isDeceased ? <LoginLinkCreator key={person.id} person={person} /> : null}
       <AdminControls person={person} tree={tree} onChanged={afterChange} />
+      {!isSelf ? <RemovePerson key={person.id} person={person} /> : null}
     </Screen>
   );
 }

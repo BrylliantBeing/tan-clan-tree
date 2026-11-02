@@ -45,6 +45,7 @@ The app has two tabs, Tree and Profile. The tree opens centered on whoever is si
 - Tap the top edge of a card to add a parent, the bottom edge to add a child, or either side to add a spouse or sibling. The tap area reaches a little past the card (see `src/features/tree/hit-zones.ts`).
 - Everyone edits their own details from the Profile tab. Admins manage other people through the link in a person's details, and review additions from the Profile tab.
 - When an admin adds someone, they can enter the details themselves. That person joins the tree right away, with no invite or review. They have no login until an admin creates a login link from their Manage page.
+- Admins can permanently remove someone from their Manage page, which also deletes their login, photo, relationships and invite links. Admins can't remove themselves, and additions waiting for review that are linked to the person must be approved or rejected first.
 
 A sibling isn't stored as its own relationship. The server saves them as another child of the same parents, so a sibling can only be added once the person has a parent in the tree.
 

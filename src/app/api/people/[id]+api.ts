@@ -1,7 +1,7 @@
 import { assertNotLastAdmin } from '@/server/admins';
-import { endAllSessions, requireApproved } from '@/server/auth';
+import { endAllSessions, requireAdmin, requireApproved } from '@/server/auth';
 import { getPool, type Row, withTransaction } from '@/server/db';
-import { fail, readBody } from '@/server/http';
+import { assertSameOrigin, fail, readBody } from '@/server/http';
 import { adminUpdatePersonSchema, updateSelfSchema } from '@/server/validation';
 
 export async function PATCH(request: Request, { id }: Record<string, string>) {
@@ -59,6 +59,41 @@ export async function PATCH(request: Request, { id }: Record<string, string>) {
        WHERE id = ?`,
       [fullName, birthDate, facebookUrl, phone, isDeceased ? 1 : 0, deathDate, id]
     );
+  });
+
+  return Response.json({ ok: true });
+}
+
+// Removes someone for good. The foreign keys take their login, sessions, photo, relationships and invites with them.
+export async function DELETE(request: Request, { id }: Record<string, string>) {
+  assertSameOrigin(request);
+  const admin = await requireAdmin(request);
+  if (id === admin.personId) fail(409, 'You cannot remove yourself. Ask another admin to do it.');
+
+  await withTransaction(async (db) => {
+    await assertNotLastAdmin(db, id);
+    const [people] = await db.execute<Row[]>(`SELECT id FROM people WHERE id = ? AND status = 'approved' FOR UPDATE`, [
+      id,
+    ]);
+    if (!people[0]) fail(404, 'That person is not in the family tree');
+
+    // Their link to this person would vanish, and approving them later would leave them attached to no one
+    const [waiting] = await db.execute<Row[]>(
+      `SELECT full_name AS fullName FROM people
+       WHERE status = 'pending' AND id IN (
+         SELECT child_id FROM parent_child WHERE parent_id = ?
+         UNION SELECT parent_id FROM parent_child WHERE child_id = ?
+         UNION SELECT person_a_id FROM spouses WHERE person_b_id = ?
+         UNION SELECT person_b_id FROM spouses WHERE person_a_id = ?
+       )
+       LIMIT 1`,
+      [id, id, id, id]
+    );
+    if (waiting[0]) {
+      fail(409, `${waiting[0].fullName} is waiting for approval and is linked to this person. Approve or reject them first.`);
+    }
+
+    await db.execute('DELETE FROM people WHERE id = ?', [id]);
   });
 
   return Response.json({ ok: true });

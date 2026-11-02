@@ -517,6 +517,49 @@ async function main() {
     assert.equal((await admin.post('/api/admin/claim-invites', { personId: id })).status, 201);
   });
 
+  await step('an admin can remove someone for good, which also ends their login', async () => {
+    const profileId = crypto.randomUUID();
+    await db.execute(`INSERT INTO people (id, full_name, status) VALUES (?, ?, 'approved')`, [
+      profileId,
+      `Removed ${RUN}`,
+    ]);
+    const token = tokenOf((await admin.post('/api/admin/claim-invites', { personId: profileId })).body.url);
+    const removed = new Browser();
+    const details = { facebookUrl: '', email: email('removed'), password: PASSWORD };
+    assert.equal((await removed.post(`/api/invite-links/${token}/claim`, details)).status, 201);
+    const relation = { type: 'spouse', firstId: profileId, secondId: aliceId };
+    assert.equal((await admin.post('/api/admin/relationships', relation)).status, 201);
+
+    const path = `/api/people/${profileId}`;
+    assert.equal((await alice.delete(path)).status, 403);
+    assert.equal((await admin.request('DELETE', path, undefined, { origin: 'https://evil.example' })).status, 403);
+    assert.equal((await admin.delete(`/api/people/${adminPersonId}`)).status, 409);
+
+    const proposed = await alice.post('/api/people', {
+      relationType: 'child',
+      relativeId: profileId,
+      otherParentId: null,
+      fullName: `Waiting ${RUN}`,
+      birthDate: '1950-01-01',
+      deathDate: '1990-01-01',
+      facebookUrl: '',
+    });
+    assert.equal(proposed.status, 201, JSON.stringify(proposed.body));
+    assert.equal((await admin.delete(path)).status, 409);
+    assert.equal((await admin.delete(`/api/admin/approvals/${proposed.body.id}`)).status, 200);
+
+    const result = await admin.delete(path);
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.equal((await admin.delete(path)).status, 404);
+
+    const { body } = await admin.get('/api/tree');
+    assert.ok(!body.people.some((person) => person.id === profileId));
+    assert.ok(!body.spouses.some((link) => [link.firstId, link.secondId].includes(profileId)));
+    assert.ok(body.people.some((person) => person.id === aliceId));
+    assert.equal((await removed.get('/api/auth/me')).body.user, null);
+    assert.equal((await new Browser().signIn(email('removed'))).status, 401);
+  });
+
   await step('the last admin cannot be removed, but a second admin makes it possible', async () => {
     const [[{ total }]] = await db.execute(`SELECT COUNT(*) AS total FROM accounts WHERE role = 'admin' AND disabled_at IS NULL`);
     assert.equal(Number(total), 1, 'this step expects a freshly migrated test database');

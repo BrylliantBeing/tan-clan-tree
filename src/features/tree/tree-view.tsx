@@ -28,7 +28,6 @@ import { PersonDetails } from './person-details';
 import { type Person, type TreeData } from './use-tree';
 
 const LINE_PADDING = 40;
-const OVER_THE_TOP_RISE = 22;
 const WIDE_SCREEN = 640;
 const ZOOM_STEP = 1.3;
 const HANDLE_SIZE = 24;
@@ -379,25 +378,10 @@ export function TreeView({
     };
   }, [layout, cameraX, cameraY, cameraScale]);
 
-  const linePaths = useMemo(() => {
-    const paths: string[] = [];
-    for (const line of layout.spouseLines) {
-      if (line.adjacent) {
-        paths.push(`M ${line.fromX} ${line.y} L ${line.toX} ${line.y}`);
-      } else {
-        const { leftX, leftY, rightX, rightY } = line.overTop;
-        const top = Math.min(leftY, rightY) - OVER_THE_TOP_RISE;
-        paths.push(`M ${leftX} ${leftY} L ${leftX} ${top} L ${rightX} ${top} L ${rightX} ${rightY}`);
-      }
-    }
-    for (const family of layout.familyLines) {
-      paths.push(`M ${family.originX} ${family.stemY} L ${family.originX} ${family.busY}`);
-      for (const child of family.children) {
-        paths.push(`M ${family.originX} ${family.busY} L ${child.x} ${family.busY} L ${child.x} ${child.y}`);
-      }
-    }
-    return paths;
-  }, [layout]);
+  const linePaths = useMemo(
+    () => [...layout.spouseLines, ...layout.familyLines].flatMap((line) => line.paths),
+    [layout]
+  );
 
   return (
     <View style={styles.container}>
