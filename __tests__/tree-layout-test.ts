@@ -40,6 +40,31 @@ describe('layoutTree', () => {
     expect(center(at.get('kid'))).toBeCloseTo((center(at.get('mom')) + center(at.get('dad'))) / 2);
   });
 
+  it('starts the line to the children from the line between a couple', () => {
+    const { layout } = positions({
+      ids: ['mom', 'dad', 'kid'],
+      spouses: [{ firstId: 'dad', secondId: 'mom' }],
+      parentChild: [
+        { parentId: 'mom', childId: 'kid' },
+        { parentId: 'dad', childId: 'kid' },
+      ],
+    });
+    expect(layout.familyLines[0].stemY).toBe(layout.spouseLines[0].y);
+  });
+
+  it('starts the line to the children from the card when there is no couple', () => {
+    const { layout } = positions({
+      ids: ['solo', 'kid', 'p1', 'p2', 'kid2'],
+      spouses: [],
+      parentChild: [
+        { parentId: 'solo', childId: 'kid' },
+        { parentId: 'p1', childId: 'kid2' },
+        { parentId: 'p2', childId: 'kid2' },
+      ],
+    });
+    for (const family of layout.familyLines) expect(family.stemY).toBe(family.originY);
+  });
+
   it('seats a person with two spouses between them', () => {
     const { at, layout } = positions({
       ids: ['hub', 'spouse1', 'spouse2'],

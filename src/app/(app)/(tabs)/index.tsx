@@ -28,7 +28,7 @@ export default function TreeScreen() {
 
   return (
     <ThemedView style={styles.fill}>
-      <TreeView tree={tree} initialFocusId={user.personId} />
+      <TreeView tree={tree} selfId={user.personId} />
     </ThemedView>
   );
 }

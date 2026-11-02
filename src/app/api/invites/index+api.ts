@@ -1,7 +1,7 @@
 import { requireApproved } from '@/server/auth';
 import { getPool, type Row } from '@/server/db';
 import { readBody } from '@/server/http';
-import { assertRelationAllowed } from '@/server/relations';
+import { assertRelationAllowed, resolveRelation } from '@/server/relations';
 import { createToken, hashToken, newId } from '@/server/tokens';
 import { createInviteSchema } from '@/server/validation';
 
@@ -33,8 +33,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const user = await requireApproved(request);
-  const relation = await readBody(request, createInviteSchema);
+  const proposed = await readBody(request, createInviteSchema);
   const db = getPool();
+  const relation = await resolveRelation(db, proposed);
   await assertRelationAllowed(db, relation);
 
   const token = createToken();

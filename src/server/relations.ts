@@ -11,6 +11,8 @@ export type RelationRequest = {
   otherParentId: string | null;
 };
 
+export type ProposedRelation = Omit<RelationRequest, 'relationType'> & { relationType: RelationType | 'sibling' };
+
 const MAX_PARENTS = 2;
 
 function orderedPair(first: string, second: string) {
@@ -39,13 +41,43 @@ export async function parentCount(db: Db, childId: string) {
   return Number(rows[0].total);
 }
 
+async function areCoParents(db: Db, first: string, second: string) {
+  const [rows] = await db.execute<Row[]>(
+    `SELECT 1 FROM parent_child a
+     JOIN parent_child b ON b.child_id = a.child_id
+     WHERE a.parent_id = ? AND b.parent_id = ?
+     LIMIT 1`,
+    [first, second]
+  );
+  return rows.length > 0;
+}
+
+// The tree only stores parents and children, so a sibling is saved as another child of the same parents
+export async function resolveRelation(db: Db, relation: ProposedRelation): Promise<RelationRequest> {
+  const { relationType, relativeId, otherParentId } = relation;
+  if (relationType !== 'sibling') return { relationType, relativeId, otherParentId };
+
+  if (otherParentId) fail(400, 'A second parent can only be chosen when adding a child');
+  if (!(await isApproved(db, relativeId))) fail(400, 'That person is not in the family tree');
+  const [parents] = await db.execute<Row[]>(
+    `SELECT l.parent_id AS parentId
+     FROM parent_child l
+     JOIN people p ON p.id = l.parent_id AND p.status = 'approved'
+     WHERE l.child_id = ?
+     ORDER BY l.parent_id`,
+    [relativeId]
+  );
+  if (parents.length === 0) fail(409, 'Add a parent first, because siblings are connected through their parents');
+  return { relationType: 'child', relativeId: parents[0].parentId, otherParentId: parents[1]?.parentId ?? null };
+}
+
 export async function assertRelationAllowed(db: Db, relation: RelationRequest) {
   const { relationType, relativeId, otherParentId } = relation;
   if (!(await isApproved(db, relativeId))) fail(400, 'That person is not in the family tree');
 
   if (relationType === 'child' && otherParentId) {
     if (otherParentId === relativeId) fail(400, 'Please choose a different second parent');
-    if (!(await areSpouses(db, relativeId, otherParentId))) {
+    if (!(await areSpouses(db, relativeId, otherParentId)) && !(await areCoParents(db, relativeId, otherParentId))) {
       fail(400, 'The second parent must be a spouse of the first parent');
     }
     if (!(await isApproved(db, otherParentId))) fail(400, 'That person is not in the family tree');

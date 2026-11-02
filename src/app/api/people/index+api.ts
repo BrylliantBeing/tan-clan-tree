@@ -1,16 +1,17 @@
 import { requireApproved } from '@/server/auth';
 import { withTransaction } from '@/server/db';
 import { readBody } from '@/server/http';
-import { assertRelationAllowed, attachNewPerson } from '@/server/relations';
+import { assertRelationAllowed, attachNewPerson, resolveRelation } from '@/server/relations';
 import { newId } from '@/server/tokens';
 import { proposeDeceasedSchema } from '@/server/validation';
 
 // Proposes a deceased relative. They have no login, and admins manage the profile once approved.
 export async function POST(request: Request) {
   const user = await requireApproved(request);
-  const { fullName, birthDate, deathDate, facebookUrl, ...relation } = await readBody(request, proposeDeceasedSchema);
+  const { fullName, birthDate, deathDate, facebookUrl, ...proposed } = await readBody(request, proposeDeceasedSchema);
 
   const id = await withTransaction(async (db) => {
+    const relation = await resolveRelation(db, proposed);
     await assertRelationAllowed(db, relation);
     const personId = newId();
     await db.execute(

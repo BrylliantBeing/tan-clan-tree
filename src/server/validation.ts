@@ -42,6 +42,15 @@ const facebookField = z.preprocess(
     .nullable()
 );
 
+const phoneField = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? null : value),
+  z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9(][0-9 ().-]{5,28}[0-9]$/, 'Please enter a valid contact number')
+    .nullable()
+);
+
 const nameField = z
   .string()
   .trim()
@@ -51,7 +60,7 @@ const nameField = z
 const idField = z.uuid('Please choose a person');
 
 const relationFields = {
-  relationType: z.enum(['spouse', 'child', 'parent']),
+  relationType: z.enum(['spouse', 'sibling', 'child', 'parent']),
   relativeId: idField,
   otherParentId: z.preprocess((value) => (value === '' ? null : value), idField.nullable()).default(null),
 };
@@ -107,6 +116,11 @@ export const updateSelfSchema = z.object({
   fullName: nameField,
   birthDate: optionalDate,
   facebookUrl: facebookField,
+  phone: phoneField,
+});
+
+export const photoSchema = z.object({
+  data: z.base64('Please choose a JPEG, PNG or WebP picture'),
 });
 
 export const adminUpdatePersonSchema = z
@@ -114,6 +128,7 @@ export const adminUpdatePersonSchema = z
     fullName: nameField,
     birthDate: optionalDate,
     facebookUrl: facebookField,
+    phone: phoneField,
     isDeceased: z.boolean(),
     deathDate: optionalDate,
   })

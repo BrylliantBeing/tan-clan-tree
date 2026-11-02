@@ -2,12 +2,14 @@
  * @jest-environment node
  */
 import { hashPassword, verifyPassword } from '@/server/password';
+import { detectPhotoType } from '@/server/photos';
 import {
   acceptInviteSchema,
   adminUpdatePersonSchema,
   isFacebookUrl,
   proposeDeceasedSchema,
   relationshipSchema,
+  updateSelfSchema,
 } from '@/server/validation';
 
 const RELATIVE_ID = '3f2b1c9e-8a7d-4e6f-9b1a-2c3d4e5f6a7b';
@@ -90,10 +92,47 @@ describe('date ordering', () => {
       fullName: 'Jose Tan',
       birthDate: null,
       facebookUrl: null,
+      phone: null,
       isDeceased: false,
       deathDate: '2010-01-01',
     };
     expect(adminUpdatePersonSchema.safeParse(person).success).toBe(false);
+  });
+});
+
+describe('contact numbers', () => {
+  const details = { fullName: 'Maria Tan', birthDate: '', facebookUrl: '' };
+
+  it.each(['+63 917 123 4567', '0917-123-4567', '(02) 8123 4567', '09171234567'])('accepts %s', (phone) => {
+    expect(updateSelfSchema.safeParse({ ...details, phone }).success).toBe(true);
+  });
+
+  it.each(['javascript:alert(1)', 'call me', '123', '+63 917 123 4567?x=1', `${'1'.repeat(41)}`])('refuses %s', (phone) => {
+    expect(updateSelfSchema.safeParse({ ...details, phone }).success).toBe(false);
+  });
+
+  it('treats a blank number as none', () => {
+    expect(updateSelfSchema.parse({ ...details, phone: '  ' }).phone).toBeNull();
+  });
+});
+
+describe('detectPhotoType', () => {
+  const bytes = (...values: number[]) => new Uint8Array(values);
+
+  it('recognizes pictures from their contents', () => {
+    expect(detectPhotoType(bytes(0xff, 0xd8, 0xff, 0xe0))).toBe('image/jpeg');
+    expect(detectPhotoType(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))).toBe('image/png');
+    expect(
+      detectPhotoType(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50))
+    ).toBe('image/webp');
+  });
+
+  it('refuses anything else, including pages and SVG', () => {
+    const text = (value: string) => new TextEncoder().encode(value);
+    expect(detectPhotoType(text('<svg onload="alert(1)"></svg>'))).toBeNull();
+    expect(detectPhotoType(text('<html><script>alert(1)</script></html>'))).toBeNull();
+    expect(detectPhotoType(bytes(0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x41, 0x56, 0x49, 0x20))).toBeNull();
+    expect(detectPhotoType(bytes())).toBeNull();
   });
 });
 

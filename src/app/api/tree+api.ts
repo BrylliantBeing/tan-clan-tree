@@ -7,10 +7,12 @@ export async function GET(request: Request) {
 
   const [people] = await db.query<Row[]>(
     `SELECT p.id, p.full_name AS fullName, p.birth_date AS birthDate, p.death_date AS deathDate,
-       p.is_deceased = 1 AS isDeceased, p.facebook_url AS facebookUrl,
+       p.is_deceased = 1 AS isDeceased, p.facebook_url AS facebookUrl, p.phone,
+       UNIX_TIMESTAMP(ph.updated_at) AS photoVersion,
        a.id IS NOT NULL AS hasAccount, COALESCE(a.role, 'member') AS role
      FROM people p
      LEFT JOIN accounts a ON a.person_id = p.id
+     LEFT JOIN person_photos ph ON ph.person_id = p.id
      WHERE p.status = 'approved'
      ORDER BY p.full_name`
   );

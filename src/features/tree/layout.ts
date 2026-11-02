@@ -1,11 +1,12 @@
 import { type ParentChildLink } from './graph';
 
-export const CARD_WIDTH = 160;
-export const CARD_HEIGHT = 76;
-const SPOUSE_GAP = 20;
-const CLUSTER_GAP = 40;
-const GENERATION_GAP = 80;
-const COMPONENT_GAP = 80;
+export const CARD_WIDTH = 184;
+export const CARD_HEIGHT = 84;
+// Wide enough to leave room for the tap areas around each card
+const SPOUSE_GAP = 32;
+const CLUSTER_GAP = 48;
+const GENERATION_GAP = 96;
+const COMPONENT_GAP = 96;
 const REFINEMENT_PASSES = 2;
 
 export type SpouseLink = { firstId: string; secondId: string };
@@ -33,6 +34,8 @@ export type FamilyLine = {
   parentIds: string[];
   originX: number;
   originY: number;
+  // Where the line down to the children starts. A couple sitting side by side start it from the line between them.
+  stemY: number;
   busY: number;
   children: { id: string; x: number; y: number }[];
 };
@@ -345,10 +348,14 @@ export function layoutTree({ ids, spouses, parentChild }: TreeInput): TreeLayout
     const parents = parentIds.map((id) => positions.get(id)!);
     const originX = parents.reduce((sum, parent) => sum + parent.x + CARD_WIDTH / 2, 0) / parents.length;
     const originY = Math.max(...parents.map((parent) => parent.y)) + CARD_HEIGHT;
+    const coupleLine = spouseLines.find(
+      (line) => line.adjacent && parentIds.includes(line.firstId) && parentIds.includes(line.secondId)
+    );
     return {
       parentIds,
       originX,
       originY,
+      stemY: coupleLine ? coupleLine.y : originY,
       busY: originY + GENERATION_GAP / 2,
       children: childIds.map((id) => {
         const child = positions.get(id)!;

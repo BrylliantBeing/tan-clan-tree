@@ -2,15 +2,12 @@ import { Link, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { ExternalLink } from '@/components/external-link';
 import {
   Button,
   Card,
   Choice,
   ConfirmButton,
-  DateField,
   ErrorMessage,
-  Field,
   Heading,
   Hint,
   PersonPicker,
@@ -20,89 +17,12 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { InviteLinkCard } from '@/features/people/invite-link-card';
+import { PersonEditor } from '@/features/people/person-editor';
+import { PhotoEditor } from '@/features/people/photo-editor';
 import { useSession } from '@/features/session/session-context';
 import { childrenOf, parentsOf, type Person, spousesOf, type TreeData, useTree } from '@/features/tree/use-tree';
 import { useTheme } from '@/hooks/use-theme';
 import { api, errorMessage } from '@/lib/api';
-import { formatDate } from '@/lib/format';
-
-function PersonEditor({
-  person,
-  isAdmin,
-  onSaved,
-}: {
-  person: Person;
-  isAdmin: boolean;
-  onSaved: () => Promise<void>;
-}) {
-  const [fullName, setFullName] = useState(person.fullName);
-  const [birthDate, setBirthDate] = useState(person.birthDate ?? '');
-  const [facebookUrl, setFacebookUrl] = useState(person.facebookUrl ?? '');
-  const [isDeceased, setIsDeceased] = useState(person.isDeceased);
-  const [deathDate, setDeathDate] = useState(person.deathDate ?? '');
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
-
-  const save = async () => {
-    setIsBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const details = { fullName, birthDate, facebookUrl };
-      await api(`/api/people/${person.id}`, {
-        method: 'PATCH',
-        body: isAdmin ? { ...details, isDeceased, deathDate: isDeceased ? deathDate : null } : details,
-      });
-      setMessage('Saved.');
-      await onSaved();
-    } catch (caught) {
-      setError(errorMessage(caught));
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
-  return (
-    <Card>
-      <SectionHeading>Edit details</SectionHeading>
-      <Field label="Full name" value={fullName} onChangeText={setFullName} />
-      <DateField label="Birthdate" value={birthDate} onChangeText={setBirthDate} />
-      <Field
-        label="Facebook link"
-        placeholder="https://facebook.com/name"
-        value={facebookUrl}
-        onChangeText={setFacebookUrl}
-        autoCapitalize="none"
-        keyboardType="url"
-      />
-      {isAdmin ? (
-        <>
-          <Choice
-            label="Status"
-            options={[
-              { value: 'living', label: 'Living' },
-              { value: 'deceased', label: 'Deceased' },
-            ]}
-            value={isDeceased ? 'deceased' : 'living'}
-            onChange={(value) => setIsDeceased(value === 'deceased')}
-          />
-          {isDeceased ? (
-            <>
-              <DateField label="Date of death" value={deathDate} onChangeText={setDeathDate} />
-              {person.hasAccount && !person.isDeceased ? (
-                <Hint>Saving will disable this person’s login and sign them out everywhere.</Hint>
-              ) : null}
-            </>
-          ) : null}
-        </>
-      ) : null}
-      <ErrorMessage message={error} />
-      {message ? <Hint>{message}</Hint> : null}
-      <Button label="Save" busy={isBusy} onPress={save} />
-    </Card>
-  );
-}
 
 function AdminControls({
   person,
@@ -242,24 +162,7 @@ function LoginLinkCreator({ person }: { person: Person }) {
   );
 }
 
-function FamilyList({ label, people }: { label: string; people: Person[] }) {
-  const theme = useTheme();
-  if (people.length === 0) return null;
-  return (
-    <View>
-      <ThemedText type="smallBold">{label}</ThemedText>
-      {people.map((person) => (
-        <Link
-          key={person.id}
-          href={{ pathname: '/person/[id]', params: { id: person.id } }}
-          style={[styles.familyLink, { color: theme.accent }]}>
-          {person.fullName}
-        </Link>
-      ))}
-    </View>
-  );
-}
-
+// Only admins can open this screen. Everyone edits their own details from the Profile tab.
 export default function PersonScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -288,7 +191,6 @@ export default function PersonScreen() {
     );
   }
 
-  const isAdmin = user?.role === 'admin';
   const isSelf = user?.personId === person.id;
   const afterChange = async () => {
     await reload();
@@ -299,39 +201,21 @@ export default function PersonScreen() {
   return (
     <Screen>
       <Heading>{person.fullName}</Heading>
+      {!person.hasAccount ? <Hint>This profile is managed by an admin.</Hint> : null}
       <Card>
-        <ThemedText type="small">{`Born: ${formatDate(person.birthDate)}`}</ThemedText>
-        {person.isDeceased ? <ThemedText type="small">{`Died: ${formatDate(person.deathDate)}`}</ThemedText> : null}
-        {person.facebookUrl ? (
-          <ExternalLink href={person.facebookUrl as never} style={{ color: theme.accent }}>
-            Facebook profile
-          </ExternalLink>
-        ) : null}
-        {!person.hasAccount ? <Hint>This profile is managed by an admin.</Hint> : null}
+        <PhotoEditor person={person} onChanged={reload} />
       </Card>
-      <View style={styles.family}>
-        <FamilyList label="Spouses" people={spousesOf(tree, person.id)} />
-        <FamilyList label="Parents" people={parentsOf(tree, person.id)} />
-        <FamilyList label="Children" people={childrenOf(tree, person.id)} />
-      </View>
-      {isAdmin || isSelf ? (
-        <PersonEditor key={person.id} person={person} isAdmin={isAdmin} onSaved={afterChange} />
-      ) : null}
-      {isAdmin && !person.hasAccount && !person.isDeceased ? (
-        <LoginLinkCreator key={person.id} person={person} />
-      ) : null}
-      {isAdmin ? <AdminControls person={person} tree={tree} onChanged={afterChange} /> : null}
+      <Card>
+        <SectionHeading>Edit details</SectionHeading>
+        <PersonEditor key={person.id} person={person} isAdmin showStatus onSaved={afterChange} />
+      </Card>
+      {!person.hasAccount && !person.isDeceased ? <LoginLinkCreator key={person.id} person={person} /> : null}
+      <AdminControls person={person} tree={tree} onChanged={afterChange} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  family: {
-    gap: Spacing.three,
-  },
-  familyLink: {
-    paddingVertical: Spacing.two,
-  },
   relationRow: {
     gap: Spacing.two,
   },

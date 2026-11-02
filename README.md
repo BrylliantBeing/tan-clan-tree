@@ -35,6 +35,20 @@ This needs a plan that includes Node.js Web Apps (Business or Cloud).
 3. Add the variables from `.env.example` in the app's environment settings, with `DB_HOST=localhost` and `APP_URL` set to your `https://` domain. `APP_URL` must match the domain exactly, because requests from any other origin are refused.
 4. Run `npm run db:migrate` and `npm run db:create-admin` once, from your computer or the server.
 
+When an update adds a file to `migrations/`, run `npm run db:migrate` before deploying the new code, because the new code expects those changes to be in the database.
+
+## Using the tree
+
+The app has two tabs, Tree and Profile. The tree opens centered on whoever is signed in, and can be dragged and zoomed.
+
+- Tap a person's card to see their details.
+- Tap the top edge of a card to add a parent, the bottom edge to add a child, or either side to add a spouse or sibling. The tap area reaches a little past the card (see `src/features/tree/hit-zones.ts`).
+- Everyone edits their own details from the Profile tab. Admins manage other people through the link in a person's details, and review additions from the Profile tab.
+
+A sibling isn't stored as its own relationship. The server saves them as another child of the same parents, so a sibling can only be added once the person has a parent in the tree.
+
+Photos are stored in the database, in `person_photos`, and only signed-in, approved members can load them. The app crops and shrinks each photo before uploading it.
+
 ## Test the approval rules
 
 `npm run test:e2e` signs in, creates people, and checks that the rules hold. It writes test data, so it refuses to run unless `DB_NAME` contains `test`.

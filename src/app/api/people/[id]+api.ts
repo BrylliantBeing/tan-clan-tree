@@ -9,17 +9,21 @@ export async function PATCH(request: Request, { id }: Record<string, string>) {
 
   if (user.role !== 'admin') {
     if (id !== user.personId) fail(403, 'You can only edit your own details');
-    const { fullName, birthDate, facebookUrl } = await readBody(request, updateSelfSchema);
-    await getPool().execute('UPDATE people SET full_name = ?, birth_date = ?, facebook_url = ? WHERE id = ?', [
+    const { fullName, birthDate, facebookUrl, phone } = await readBody(request, updateSelfSchema);
+    await getPool().execute('UPDATE people SET full_name = ?, birth_date = ?, facebook_url = ?, phone = ? WHERE id = ?', [
       fullName,
       birthDate,
       facebookUrl,
+      phone,
       id,
     ]);
     return Response.json({ ok: true });
   }
 
-  const { fullName, birthDate, facebookUrl, isDeceased, deathDate } = await readBody(request, adminUpdatePersonSchema);
+  const { fullName, birthDate, facebookUrl, phone, isDeceased, deathDate } = await readBody(
+    request,
+    adminUpdatePersonSchema
+  );
 
   await withTransaction(async (db) => {
     const [people] = await db.execute<Row[]>(
@@ -51,8 +55,9 @@ export async function PATCH(request: Request, { id }: Record<string, string>) {
     }
 
     await db.execute(
-      'UPDATE people SET full_name = ?, birth_date = ?, facebook_url = ?, is_deceased = ?, death_date = ? WHERE id = ?',
-      [fullName, birthDate, facebookUrl, isDeceased ? 1 : 0, deathDate, id]
+      `UPDATE people SET full_name = ?, birth_date = ?, facebook_url = ?, phone = ?, is_deceased = ?, death_date = ?
+       WHERE id = ?`,
+      [fullName, birthDate, facebookUrl, phone, isDeceased ? 1 : 0, deathDate, id]
     );
   });
 

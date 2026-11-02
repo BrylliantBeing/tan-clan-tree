@@ -14,6 +14,9 @@ export type Person = {
   deathDate: string | null;
   isDeceased: boolean;
   facebookUrl: string | null;
+  phone: string | null;
+  // Changes with each upload. Null when there is no photo.
+  photoVersion: number | null;
   hasAccount: boolean;
   role: 'member' | 'admin';
 };

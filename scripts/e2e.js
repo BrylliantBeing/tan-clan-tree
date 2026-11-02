@@ -262,6 +262,91 @@ async function main() {
     assert.equal(result.status, 409);
   });
 
+  await step('a sibling joins under the same parents, even when the parents are not linked as spouses', async () => {
+    const child = spouse1.id;
+    const parentA = crypto.randomUUID();
+    const parentB = crypto.randomUUID();
+    for (const [id, name] of [[parentA, 'Parent A'], [parentB, 'Parent B']]) {
+      await db.execute(`INSERT INTO people (id, full_name, status) VALUES (?, ?, 'approved')`, [id, `${name} ${RUN}`]);
+      await db.execute('INSERT INTO parent_child (parent_id, child_id) VALUES (?, ?)', [id, child]);
+    }
+
+    const browser = new Browser();
+    await claim(browser, await invite(alice, 'sibling', child), 'sibling');
+    const siblingId = await personId(browser);
+    assert.equal((await admin.post(`/api/admin/approvals/${siblingId}`)).status, 200);
+    const { body } = await admin.get('/api/tree');
+    const parents = body.parentChild.filter((link) => link.childId === siblingId).map((link) => link.parentId);
+    assert.deepEqual(parents.sort(), [parentA, parentB].sort());
+  });
+
+  await step('a deceased sibling also joins under the same parents', async () => {
+    const proposed = await alice.post('/api/people', {
+      relationType: 'sibling',
+      relativeId: spouse1.id,
+      otherParentId: null,
+      fullName: `Late Sibling ${RUN}`,
+      birthDate: '',
+      deathDate: '',
+      facebookUrl: '',
+    });
+    assert.equal(proposed.status, 201, JSON.stringify(proposed.body));
+    assert.equal((await admin.post(`/api/admin/approvals/${proposed.body.id}`)).status, 200);
+    const { body } = await admin.get('/api/tree');
+    assert.equal(body.parentChild.filter((link) => link.childId === proposed.body.id).length, 2);
+  });
+
+  await step('a sibling is refused when there are no parents to share', async () => {
+    const result = await alice.post('/api/invites', { relationType: 'sibling', relativeId: adminPersonId, otherParentId: null });
+    assert.equal(result.status, 409);
+  });
+
+  await step('only spouses or existing co-parents can be chosen as a second parent', async () => {
+    const stranger = crypto.randomUUID();
+    await db.execute(`INSERT INTO people (id, full_name, status) VALUES (?, ?, 'approved')`, [stranger, `Stranger ${RUN}`]);
+    const result = await alice.post('/api/invites', { relationType: 'child', relativeId: aliceId, otherParentId: stranger });
+    assert.equal(result.status, 400);
+  });
+
+  await step('a contact number is saved and shown to the family, and unsafe ones are refused', async () => {
+    const details = { fullName: `alice ${RUN}`, birthDate: '1990-05-17', facebookUrl: '' };
+    assert.equal((await alice.patch(`/api/people/${aliceId}`, { ...details, phone: '+63 917 123 4567' })).status, 200);
+    const { body } = await spouse2.browser.get('/api/tree');
+    assert.equal(body.people.find((person) => person.id === aliceId).phone, '+63 917 123 4567');
+    assert.equal((await alice.patch(`/api/people/${aliceId}`, { ...details, phone: 'javascript:alert(1)' })).status, 400);
+    assert.equal((await alice.patch(`/api/people/${aliceId}`, details)).status, 400);
+  });
+
+  await step('photos are private, limited to pictures, and editable only by their owner or an admin', async () => {
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), crypto.randomBytes(2048)]);
+    const data = jpeg.toString('base64');
+    const path = `/api/people/${aliceId}/photo`;
+    const before = (await alice.get('/api/tree')).body.people.find((person) => person.id === aliceId);
+    assert.equal(before.photoVersion, null);
+
+    assert.equal((await spouse2.browser.put(path, { data })).status, 403);
+    assert.equal((await alice.put(path, { data: Buffer.from('<svg onload="alert(1)"></svg>').toString('base64') })).status, 400);
+    assert.equal((await alice.put(path, { data: 'not base64!' })).status, 400);
+    assert.equal((await alice.put(path, { data: Buffer.concat([jpeg, Buffer.alloc(600 * 1024)]).toString('base64') })).status, 413);
+    assert.equal((await alice.request('PUT', path, { data }, { origin: 'https://evil.example' })).status, 403);
+
+    assert.equal((await alice.put(path, { data })).status, 200);
+    const after = (await alice.get('/api/tree')).body.people.find((person) => person.id === aliceId);
+    assert.notEqual(after.photoVersion, null);
+
+    assert.equal((await new Browser().get(path)).status, 401);
+    const response = await fetch(BASE_URL + path, { headers: { Cookie: spouse2.browser.cookie } });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'image/jpeg');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.ok(Buffer.from(await response.arrayBuffer()).equals(jpeg));
+
+    assert.equal((await spouse2.browser.delete(path)).status, 403);
+    assert.equal((await admin.put(path, { data })).status, 200);
+    assert.equal((await alice.delete(path)).status, 200);
+    assert.equal((await alice.get(path)).status, 404);
+  });
+
   let deceasedId;
 
   await step('a proposed deceased relative needs approval and has no login', async () => {
@@ -334,6 +419,7 @@ async function main() {
       fullName: `Second Profile ${RUN}`,
       birthDate: '',
       facebookUrl: '',
+      phone: '',
       isDeceased: true,
       deathDate: '',
     });
@@ -342,13 +428,14 @@ async function main() {
   });
 
   await step('members can edit only themselves, and cannot change their own status', async () => {
-    const details = { fullName: 'Hacked', birthDate: '', facebookUrl: '' };
+    const details = { fullName: 'Hacked', birthDate: '', facebookUrl: '', phone: '' };
     assert.equal((await alice.patch(`/api/people/${deceasedId}`, details)).status, 403);
     assert.equal((await alice.patch(`/api/people/${adminPersonId}`, details)).status, 403);
     const own = await alice.patch(`/api/people/${aliceId}`, {
       fullName: `Alice Edited ${RUN}`,
       birthDate: '1990-05-17',
       facebookUrl: '',
+      phone: '',
       isDeceased: true,
     });
     assert.equal(own.status, 200);
@@ -370,6 +457,7 @@ async function main() {
       fullName: 'Alice',
       birthDate: '',
       facebookUrl: 'javascript:alert(1)',
+      phone: '',
     });
     assert.equal(result.status, 400);
   });
@@ -414,6 +502,7 @@ async function main() {
       fullName: `spouse1 ${RUN}`,
       birthDate: '1990-05-17',
       facebookUrl: '',
+      phone: '',
       isDeceased: true,
       deathDate: '2020-01-01',
     });

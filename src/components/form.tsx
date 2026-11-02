@@ -1,5 +1,6 @@
 import { type ComponentProps, type PropsWithChildren, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -8,9 +9,12 @@ import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
 export function Screen({ children }: PropsWithChildren) {
+  const insets = useSafeAreaInsets();
   return (
     <ThemedView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.screenContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[styles.screenContent, { paddingTop: Spacing.three + insets.top }]}
+        keyboardShouldPersistTaps="handled">
         <View style={styles.column}>{children}</View>
       </ScrollView>
     </ThemedView>
